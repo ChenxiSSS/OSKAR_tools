@@ -19,7 +19,7 @@ MWA_LAT = -26.7033194444
 
 parser = OptionParser()
 
-parser.add_option('-i', '--ini_file', help='Enter template oskar .ini')
+parser.add_option('-i', '--ini_file', default=False, help='Enter template oskar .ini - defaults to the template .ini located in $OSKAR_TOOLS/telescopes/--telescope')
 parser.add_option('-n','--name', help='Enter prefix name for outputs')
 parser.add_option('-s','--srclist', help='Enter location and name of the RTS srclist to use as a sky model')
 parser.add_option('-d','--debug',default=False,action='store_true', help='Enable to debug with print statements')
@@ -68,9 +68,9 @@ def add_time(date_time,time_step):
 	return '%02d-%02d-%d %d:%02d:%05.2f' %(day,month,year,int(hours),int(mins),secs)
 
 def calc_jdcal(date):
-	dyr, hms = date.split()
+	dmy, hms = date.split()
 	
-	day,month,year = map(int,dyr.split('-'))
+	day,month,year = map(int,dmy.split('-'))
 	hour,mins,secs = map(float,hms.split(':'))
 
 	##For some reason jdcal gives you the date in two pieces
@@ -146,7 +146,7 @@ def create_uvfits(template_uvfits=None, freq_cent=None, ra_point=None, dec_point
 	vv = zeros(n_data)
 	ww = zeros(n_data)
 	baseline = zeros(n_data)
-	date = zeros(n_data)
+	date_array = zeros(n_data)
 	
 	xx_us,xx_vs,xx_ws,xx_res,xx_ims = get_osk_data(oskar_vis_tag=oskar_vis_tag,polarisation='XX')
 	yy_us,yy_vs,yy_ws,yy_res,yy_ims = get_osk_data(oskar_vis_tag=oskar_vis_tag,polarisation='YY')
@@ -169,13 +169,13 @@ def create_uvfits(template_uvfits=None, freq_cent=None, ra_point=None, dec_point
 		vv[i] = xx_vs[i] / freq_cent
 		ww[i] = xx_ws[i] / freq_cent
 		baseline[i] = template_data[i][3]
-		date[i] = float_jd
+		date_array[i] = float_jd
 		rotate_phase(xx_ws[i],v_container[i][0,0,0,0,:,:])
 
 	##UU, VV, WW don't actually get read in by RTS - might be an issue with
 	##miriad/wsclean however, as it looks like oskar w = negative maps w
 	uvparnames = ['UU','VV','WW','BASELINE','DATE']
-	parvals = [uu,vv,ww,baseline,date]
+	parvals = [uu,vv,ww,baseline,date_array]
 		
 	uvhdu = fits.GroupData(v_container,parnames=uvparnames,pardata=parvals,bitpix=-32)
 	uvhdu = fits.GroupsHDU(uvhdu)
@@ -234,10 +234,19 @@ def create_uvfits(template_uvfits=None, freq_cent=None, ra_point=None, dec_point
 	uvhdu.header['OBJECT']  = 'Undefined'                                                           
 	uvhdu.header['OBSRA']   = ra_point                                          
 	uvhdu.header['OBSDEC']  = dec_point
-
+	
 	##ANTENNA TABLE MODS======================================================================
 
 	template_file[1].header['FREQ'] = freq_cent
+	
+	##MAJICK uses this date to set the LST
+	dmy, hms = date.split()
+	day,month,year = map(int,dmy.split('-'))
+	hour,mins,secs = map(float,hms.split(':'))
+	
+	rdate = "%d-%02d-%2dT%2d:%2d:%.2f" %(year,month,day,hour,mins,secs)
+	
+	template_file[1].header['RDATE'] = rdate
 
 	## Create hdulist and write out file
 	hdulist = fits.HDUList(hdus=[uvhdu,template_file[1]])
@@ -245,9 +254,9 @@ def create_uvfits(template_uvfits=None, freq_cent=None, ra_point=None, dec_point
 	template_file.close()
 	hdulist.close()
 	
-def make_ini(prefix_name,ra,dec,freq,start_time,sky_osm_name,healpix):
+def make_ini(prefix_name,ra,dec,freq,start_time,sky_osm_name,healpix,template_ini):
 	out_file = open("%s.ini" %prefix_name,'w+')
-	template = open(options.ini_file).read().split('\n')
+	template = open(template_ini).read().split('\n')
 	for line in template:
 		if "start_frequency_hz" in line:
 			line = "start_frequency_hz=%.10f" %freq
@@ -337,24 +346,20 @@ healpix = options.healpix
 telescope_dir = "%s/telescopes/%s" %(OSKAR_dir,options.telescope)
 template_uvfits = "%s/telescopes/%s/template_%s.uvfits" %(OSKAR_dir,options.telescope,options.telescope)
 
-#prefixes = []
-#ras = []
-#freqs = []
-			
-
+if options.ini_file:
+	template_ini = options.ini_file
+else:
+	template_uvfits = "%s/telescopes/%s/template_%s.ini" %(OSKAR_dir,options.telescope,options.telescope)
+	
 ##Unflagged channel numbers
-#good_chans = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29]
+good_chans = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29]
+#good_chans = xrange(32)
 #good_chans = [0,1,2,3,4]
-#good_chans = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]
 #good_chans = [0]
 
 ##Flagged channel numbers
 #bad_chans = [0,1,16,30,31]
 
-good_chans = xrange(32)
-
-#job_id = int(environ['PBS_ARRAYID'])
-#band_num = job_id + 1
 band_num = int(options.band_num)
 base_freq = ((band_num - 1)*(b_width/24.0)) + low_freq
 
@@ -381,15 +386,15 @@ for chan in good_chans:
 	freqs = []
 	##Take the band base_freq and add on fine channel freq
 	freq = base_freq + (chan*ch_width)
-	##For each time step
 	
 	##Sky model is the same for all time steps as OSKAR does the horizon clipping itself - 
 	##only generate one for all timesteps
-	sky_osm_name = "%s.osm" %prefix_name
+	sky_osm_name = "%s_%.3f.osm" %(outname,freq/1e+6)
 	##Create the sky model at the obs frequency - this way we can half mimic spectral curvature
 	cmd = "python %s/srclist2osm.py -s %s -o %s -f %.10f" %(OSKAR_dir,options.srclist,sky_osm_name,freq)
 	run_command(cmd)
 	
+	##For each time step
 	for tstep in tsteps:
 		time = add_time(oskar_date,tstep)
 		##Precess ra by time since the beginning of the observation 
@@ -407,7 +412,7 @@ for chan in good_chans:
 			prefix_name = "%s_%.3f_%02d" %(outname,freq/1e+6,int(tstep))
 		
 		##Create ini file to run oskar
-		make_ini(prefix_name,ra,MWA_LAT,freq,time,sky_osm_name,healpix)
+		make_ini(prefix_name,ra,MWA_LAT,freq,time,sky_osm_name,healpix,template_ini)
 		
 		##Run the simulation
 		cmd = "oskar_sim_interferometer %s.ini" %prefix_name
@@ -438,7 +443,7 @@ for chan in good_chans:
 		cmd = "rm %s*txt" %prefix_name
 		run_command(cmd)
 		
-	cmd = "rm %s.osm" %prefix_name
+	cmd = "rm %s" %sky_osm_name
 	run_command(cmd)
 		
 chdir(cwd)

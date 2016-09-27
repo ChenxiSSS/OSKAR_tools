@@ -53,12 +53,12 @@ def add_time(date_time,time_step):
 		pass
 	return '%02d-%02d-%d %d:%02d:%05.2f' %(day,month,year,int(hours),int(mins),secs)
 
-def edit_freq(uvfits_file,base_freq,ch_width):
+def edit_freq(base_uvfits, new_uvfits, base_freq,ch_width):
 	'''Edits the freq of the file, just incase RTS is doing something mental'''
-	oskar_file = fits.open(uvfits_file)
+	oskar_file = fits.open(base_uvfits)
 	oskar_file[0].header['CRVAL4'] = base_freq + (ch_width / 2.0)
 	oskar_file[1].header['FREQ'] = base_freq + (ch_width / 2.0)
-	oskar_file.writeto(uvfits_file,clobber=True)
+	oskar_file.writeto(new_uvfits,clobber=True)
 	oskar_file.close()
 
 ##Open the metafits file and get the relevant info
@@ -133,13 +133,13 @@ for chan in bad_chans:
 		for tstep in tsteps:
 			##If less than second time step, RTS needs a different naming convention
 			if dump_time < 1:
-				uvfits_name = "%s_%.3f_%05.2f.uvfits" %(options.output_name,freq/1e+6,tstep)
-				first_good_chan_name = "%s_%.3f_%05.2f.uvfits" %(options.output_name,(base_freq + (good_chans[0]*ch_width))/1e+6,tstep)
+				new_uvfits = "%s_%.3f_%05.2f.uvfits" %(options.output_name,freq/1e+6,tstep)
+				base_uvfits = "%s_%.3f_%05.2f.uvfits" %(options.output_name,(base_freq + (good_chans[0]*ch_width))/1e+6,tstep)
 			else:
-				uvfits_name = "%s_%.3f_%02d.uvfits" %(options.output_name,freq/1e+6,int(tstep))
-				first_good_chan_name = "%s_%.3f_%02d.uvfits" %(options.output_name,(base_freq + (good_chans[0]*ch_width))/1e+6,int(tstep))
-			cmd = "cp %s %s" %(first_good_chan_name,uvfits_name)
-			run_command(cmd)
+				new_uvfits = "%s_%.3f_%02d.uvfits" %(options.output_name,freq/1e+6,int(tstep))
+				base_uvfits = "%s_%.3f_%02d.uvfits" %(options.output_name,(base_freq + (good_chans[0]*ch_width))/1e+6,int(tstep))
+			#cmd = "cp %s %s" %(first_good_chan_name,uvfits_name)
+			#run_command(cmd)
 			##After creating file, change frequency in header of both data and antenna files
-			edit_freq(uvfits_name,base_freq,ch_width)
+			edit_freq(base_uvfits, new_uvfits, base_freq, ch_width)
 			

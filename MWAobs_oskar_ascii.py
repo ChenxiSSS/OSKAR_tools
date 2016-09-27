@@ -20,7 +20,7 @@ MWA_LAT = -26.7033194444
 parser = OptionParser()
 
 parser.add_option('-i', '--ini_file', default=False, help='Enter template oskar .ini - defaults to the template .ini located in $OSKAR_TOOLS/telescopes/--telescope')
-parser.add_option('-n','--name', help='Enter prefix name for outputs')
+parser.add_option('-n','--output_name', help='Enter prefix name for outputs')
 parser.add_option('-s','--srclist', help='Enter location and name of the RTS srclist to use as a sky model')
 parser.add_option('-d','--debug',default=False,action='store_true', help='Enable to debug with print statements')
 parser.add_option('-o','--data_dir', help='Where to output the finished uvfits')
@@ -28,7 +28,7 @@ parser.add_option('-m','--metafits', help='Enter name of metafits file to base o
 parser.add_option('-t','--time', help='Enter start,end of sim in seconds from the beginning of the observation (as set by metafits)')
 parser.add_option('-x','--twosec', default=False, help='Enable to force a different time cadence - enter the time in seconds')
 parser.add_option('-f','--healpix', default=False, help='Enter healpix tag to use base images')
-parser.add_option('-a','--telescope', default='MWA_phase1', help='Enter telescope used for simulation. Default = mwa_phase1')
+parser.add_option('-a','--telescope', default='MWA_phase1', help='Enter telescope used for simulation. Default = MWA_phase1')
 parser.add_option('-b','--band_num', help='Enter band number to simulate')
 
 options, args = parser.parse_args()
@@ -370,7 +370,7 @@ cwd = getcwd()
 tmp_dir = cwd+'/tmp'
 data_dir = options.data_dir
 
-outname = options.name
+outname = options.output_name
 
 ##Sidereal seconds per solar seconds - ie if 1s passes on
 ##the clock, sky has moved by 1.00274 secs of angle

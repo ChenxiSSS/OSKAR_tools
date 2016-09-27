@@ -11,17 +11,16 @@ except ImportError:
 
 parser = OptionParser()
 
-#parser.add_option('-i', '--ini_file', help='Enter template oskar .ini')
-parser.add_option('-n','--name', help='Enter prefix name for outputs')
-parser.add_option('-s','--srclist', help='Enter location and name of the RTS srclist to use as a sky model')
+parser.add_option('-n','--output_name', help='Enter prefix name for outputs')
 parser.add_option('-d','--debug',default=False,action='store_true', help='Enable to debug with print statements')
 parser.add_option('-o','--data_dir', help='Where to output the finished uvfits')
 parser.add_option('-m','--metafits', help='Enter name of metafits file to base obs on')
 parser.add_option('-t','--time', help='Enter start,end of sim in seconds from the beginning of the observation (as set by metafits)')
 parser.add_option('-x','--twosec', default=False, help='Enable to force a different time cadence - enter the time in seconds')
+parser.add_option('-a','--telescope', default='MWA_phase1', help='Enter telescope used for simulation. Default = MWA_phase1')
+parser.add_option('-b','--band_num', help='Enter band number to fill missing channels for')
 
 options, args = parser.parse_args()
-
 debug = options.debug
 
 
@@ -112,10 +111,8 @@ good_chans = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27
 ##Flagged channel numbers
 bad_chans = [0,1,16,30,31]
 	
-job_id = int(environ['PBS_ARRAYID'])
-band_num = job_id + 1
-
-base_freq = (job_id*(b_width/24.0)) + low_freq
+band_num = int(options.band_num)
+base_freq = ((band_num - 1)*(b_width/24.0)) + low_freq
 
 start_tstep,end_tstep = map(float,options.time.split(','))
 tsteps = arange(start_tstep,end_tstep,dump_time)
@@ -136,11 +133,11 @@ for chan in bad_chans:
 		for tstep in tsteps:
 			##If less than second time step, RTS needs a different naming convention
 			if dump_time < 1:
-				uvfits_name = "%s_%.3f_%05.2f.uvfits" %(options.name,freq/1e+6,tstep)
-				first_good_chan_name = "%s_%.3f_%05.2f.uvfits" %(options.name,(base_freq + (good_chans[0]*ch_width))/1e+6,tstep)
+				uvfits_name = "%s_%.3f_%05.2f.uvfits" %(options.output_name,freq/1e+6,tstep)
+				first_good_chan_name = "%s_%.3f_%05.2f.uvfits" %(options.output_name,(base_freq + (good_chans[0]*ch_width))/1e+6,tstep)
 			else:
-				uvfits_name = "%s_%.3f_%02d.uvfits" %(options.name,freq/1e+6,int(tstep))
-				first_good_chan_name = "%s_%.3f_%02d.uvfits" %(options.name,(base_freq + (good_chans[0]*ch_width))/1e+6,int(tstep))
+				uvfits_name = "%s_%.3f_%02d.uvfits" %(options.output_name,freq/1e+6,int(tstep))
+				first_good_chan_name = "%s_%.3f_%02d.uvfits" %(options.output_name,(base_freq + (good_chans[0]*ch_width))/1e+6,int(tstep))
 			cmd = "cp %s %s" %(first_good_chan_name,uvfits_name)
 			run_command(cmd)
 			##After creating file, change frequency in header of both data and antenna files

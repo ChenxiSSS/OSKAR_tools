@@ -349,7 +349,7 @@ template_uvfits = "%s/telescopes/%s/template_%s.uvfits" %(OSKAR_dir,options.tele
 if options.ini_file:
 	template_ini = options.ini_file
 else:
-	template_uvfits = "%s/telescopes/%s/template_%s.ini" %(OSKAR_dir,options.telescope,options.telescope)
+	template_ini = "%s/telescopes/%s/template_%s.ini" %(OSKAR_dir,options.telescope,options.telescope)
 	
 ##Unflagged channel numbers
 good_chans = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29]

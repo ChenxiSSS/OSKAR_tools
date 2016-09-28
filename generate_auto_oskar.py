@@ -60,7 +60,7 @@ def write_add_diffuse(wd=None, metafits=None, diffuse_tag=None, time=None, band_
 	num_time_steps = int((finish - start) / float(cadence))
 	
 	##Takes around 10 mins to do one time step with 27 channels
-	hours = ceil((num_time_steps * 10) / 60.0)
+	hours = ceil((num_time_steps * 15) / 60.0)
 	
 	file_name = 'qsub_%s_band%02d_t%d-%d.sh' %(diffuse_tag,band_num,start,finish)
 	out_file = open(file_name,'w+')
@@ -175,13 +175,13 @@ out_file.write('#!/bin/bash\n')
 if diffuse_tag:
 	for point, diffuse in zip(point_qsubs,diffuse_qsubs):
 		out_file.write('POINT_RUN=$(qsub %s/%s | cut -d "." -f 1)\n' %(wd,point))
-		out_file.write('echo "%s is job "$MAIN_RUN\n' %point)
-		out_file.write('DIFFUSE_RUN=$(qsub -W --depend:afterok:$POINT_RUN %s/%s | cut -d "." -f 1)\n' %(wd,diffuse))
+		out_file.write('echo "%s is job "$POINT_RUN\n' %point)
+		out_file.write('DIFFUSE_RUN=$(qsub -W --depend=afterok:$POINT_RUN %s/%s | cut -d "." -f 1)\n' %(wd,diffuse))
 		out_file.write('echo "%s is job "$DIFFUSE_RUN\n' %diffuse)
 		
 else:
 	for point in point_qsubs:
 		out_file.write('POINT_RUN=$(qsub %s | cut -d "." -f 1)\n' %point)
-		out_file.write('echo "%s is job "$MAIN_RUN\n' %point)
+		out_file.write('echo "%s is job "$POINT_RUN\n' %point)
 		
 out_file.close()

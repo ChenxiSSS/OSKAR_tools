@@ -174,9 +174,9 @@ out_file.write('#!/bin/bash\n')
 
 if diffuse_tag:
 	for point, diffuse in zip(point_qsubs,diffuse_qsubs):
-		out_file.write('POINT_RUN=$(qsub %s | cut -d "." -f 1)\n' %point)
+		out_file.write('POINT_RUN=$(qsub %s/%s | cut -d "." -f 1)\n' %(wd,point))
 		out_file.write('echo "%s is job "$MAIN_RUN\n' %point)
-		out_file.write('DIFFUSE_RUN=$(qsub -W --depend:afterok:$POINT_RUN %s | cut -d "." -f 1)\n' %diffuse)
+		out_file.write('DIFFUSE_RUN=$(qsub -W --depend:afterok:$POINT_RUN %s/%s | cut -d "." -f 1)\n' %(wd,diffuse))
 		out_file.write('echo "%s is job "$DIFFUSE_RUN\n' %diffuse)
 		
 else:

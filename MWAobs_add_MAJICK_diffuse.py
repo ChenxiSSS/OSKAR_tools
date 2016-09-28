@@ -77,21 +77,25 @@ start_tstep,end_tstep = map(float,options.time.split(','))
 tsteps = arange(start_tstep,end_tstep,dump_time)
 
 
-sim_command = "time python $MAJICK_DIR/simulate_uvfits.py"
+good_chans = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29]
 
-sim_command += " --freq_start=%.5f" %(base_freq / 1e+6)
-sim_command += " --num_freqs=32"
-sim_command += " --freq_res=%.5f" %(ch_width / 1e+6)
-sim_command += " --time_start=%.5f " %start_tstep
-sim_command += " --num_times=%d" %len(tsteps)
-sim_command += " --time_res=%.5f" %dump_time
-sim_command += " --date=%s" %intial_date
-sim_command += " --tag_name=%s" %options.output_name
-sim_command += " --base_uvfits=%s" %options.base_uvfits
-sim_command += " --data_loc=%s" %options.data_loc
-sim_command += " --telescope=%s" %options.telescope
-sim_command += " --diffuse"
+for chan in good_chans:
+	freq = base_freq + (chan*ch_width)
 
-run_command(sim_command)
+	sim_command = "time python $MAJICK_DIR/simulate_uvfits.py"
+	sim_command += " --freq_start=%.5f" %(freq / 1e+6)
+	sim_command += " --num_freqs=1"
+	sim_command += " --freq_res=%.5f" %(ch_width / 1e+6)
+	sim_command += " --time_start=%.5f " %start_tstep
+	sim_command += " --num_times=%d" %len(tsteps)
+	sim_command += " --time_res=%.5f" %dump_time
+	sim_command += " --date=%s" %intial_date
+	sim_command += " --tag_name=%s" %options.output_name
+	sim_command += " --base_uvfits=%s" %options.base_uvfits
+	sim_command += " --data_loc=%s" %options.data_loc
+	sim_command += " --telescope=%s" %options.telescope
+	sim_command += " --diffuse"
+
+	run_command(sim_command)
 
 

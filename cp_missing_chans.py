@@ -1,3 +1,4 @@
+#!/usr/bin/python
 from subprocess import call
 from sys import exit
 from optparse import OptionParser

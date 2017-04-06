@@ -28,7 +28,7 @@ parser.add_option('-m','--metafits', help='Enter name of metafits file to base o
 parser.add_option('-t','--time', help='Enter start,end of sim in seconds from the beginning of the observation (as set by metafits)')
 parser.add_option('-x','--twosec', default=False, help='Enable to force a different time cadence - enter the time in seconds')
 parser.add_option('-f','--healpix', default=False, help='Enter healpix tag to use base images')
-parser.add_option('-a','--telescope', default='MWA_phase1', help='Enter telescope used for simulation. Default = MWA_phase1')
+parser.add_option('-a','--telescope', default='%s/telescopes/MWA_phase1', help='Enter telescope used for simulation. Default = $OSKAR_TOOLS/telescopes/MWA_phase1')
 parser.add_option('-b','--band_num', help='Enter band number to simulate')
 
 options, args = parser.parse_args()
@@ -208,12 +208,12 @@ def create_uvfits(template_uvfits=None, freq_cent=None, ra_point=None, dec_point
     uvhdu.header['CDELT5'] = template_file[0].header['CDELT5']
 
     uvhdu.header['CTYPE6'] = template_file[0].header['CTYPE6']
-    uvhdu.header['CRVAL6'] = template_file[0].header['CRVAL6']
+    uvhdu.header['CRVAL6'] = ra_point
     uvhdu.header['CRPIX6'] = template_file[0].header['CRPIX6']
     uvhdu.header['CDELT6'] = template_file[0].header['CDELT6']
 
     uvhdu.header['CTYPE7'] = template_file[0].header['CTYPE7']
-    uvhdu.header['CRVAL7'] = template_file[0].header['CRVAL7']
+    uvhdu.header['CRVAL7'] = dec_point
     uvhdu.header['CRPIX7'] = template_file[0].header['CRPIX7']
     uvhdu.header['CDELT7'] = template_file[0].header['CDELT7']
 
@@ -343,13 +343,22 @@ intial_ra_point = float(MRO.sidereal_time())*R2D
 dec_point = MWA_LAT
 
 healpix = options.healpix
-telescope_dir = "%s/telescopes/%s" %(OSKAR_dir,options.telescope)
-template_uvfits = "%s/telescopes/%s/template_%s.uvfits" %(OSKAR_dir,options.telescope,options.telescope)
+#telescope_dir = "%s/telescopes/%s" %(OSKAR_dir,options.telescope)
+#template_uvfits = "%s/telescopes/%s/template_%s.uvfits" %(OSKAR_dir,options.telescope,options.telescope)
+
+#if options.ini_file:
+    #template_ini = options.ini_file
+#else:
+    #template_ini = "%s/telescopes/%s/template_%s.ini" %(OSKAR_dir,options.telescope,options.telescope)
+    
+telescope_dir = options.telescope
+telescope_name = options.telescope.split('/')[-1]
+template_uvfits = "%s/template_%s.uvfits" %(telescope_dir,telescope_name)
 
 if options.ini_file:
     template_ini = options.ini_file
 else:
-    template_ini = "%s/telescopes/%s/template_%s.ini" %(OSKAR_dir,options.telescope,options.telescope)
+    template_ini = "%s/template_%s.ini" %(telescope_dir,telescope_name)
     
 ##Unflagged channel numbers
 good_chans = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29]

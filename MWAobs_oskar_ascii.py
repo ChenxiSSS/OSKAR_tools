@@ -28,7 +28,7 @@ parser.add_option('-m','--metafits', help='Enter name of metafits file to base o
 parser.add_option('-t','--time', help='Enter start,end of sim in seconds from the beginning of the observation (as set by metafits)')
 parser.add_option('-x','--twosec', default=False, help='Enable to force a different time cadence - enter the time in seconds')
 parser.add_option('-f','--healpix', default=False, help='Enter healpix tag to use base images')
-parser.add_option('-a','--telescope', default='%s/telescopes/MWA_phase1', help='Enter telescope used for simulation. Default = $OSKAR_TOOLS/telescopes/MWA_phase1')
+parser.add_option('-a','--telescope', default='$OSKAR_TOOLS/telescopes/MWA_phase1', help='Enter telescope used for simulation. Default = $OSKAR_TOOLS/telescopes/MWA_phase1')
 parser.add_option('-b','--band_num', help='Enter band number to simulate')
 
 options, args = parser.parse_args()
@@ -410,7 +410,9 @@ for chan in good_chans:
         ##(convert time to angle, change from seconds to degrees)
         ##Include half of the time step
         
-        ra = intial_ra_point + (((tstep + dump_time/2.0)*SOLAR2SIDEREAL)*(15/3600.0))
+        ##DO NOT ADD ON HALF A TIME STEP - I *think* OSKAR does this internally
+        #ra = intial_ra_point + (((tstep + dump_time/2.0)*SOLAR2SIDEREAL)*(15/3600.0))
+        ra = intial_ra_point + (((tstep)*SOLAR2SIDEREAL)*(15/3600.0))
         if ra >=360.0: ra -= 360.0
         
         ##Make prefix name for the individual time/freq step

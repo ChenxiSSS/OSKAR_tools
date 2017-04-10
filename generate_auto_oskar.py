@@ -181,7 +181,7 @@ if diffuse_tag:
 		
 else:
 	for point in point_qsubs:
-		out_file.write('POINT_RUN=$(qsub %s | cut -d "." -f 1)\n' %point)
+        out_file.write('POINT_RUN=$(qsub %s/%s | cut -d "." -f 1)\n' %(wd,point))
 		out_file.write('echo "%s is job "$POINT_RUN\n' %point)
 		
 out_file.close()

@@ -18,14 +18,14 @@ def write_oskar(wd=None, metafits=None, srclist=None, point_source_tag=None, tim
     out_file.write('#PBS -l nodes=1:gpus=1\n')
     out_file.write('#PBS -l walltime=%02d:00:00\n' %hours)
     out_file.write('#PBS -m e\n')
-    out_file.write('#PBS -q sstar\n')
+    out_file.write('#PBS -q gstar\n')
     out_file.write('#PBS -A p048_astro\n')
 
     ##Something one of the gstar people told me a long time ago should be included
     ##if you only use one GPU.
-    out_file.write('#cat $PBS_GPUFILE\n')
-    out_file.write('b="`cat $PBS_GPUFILE | cut -c13`"\n')
-    out_file.write('export CUDA_VISIBLE_DEVICES=$b\n')
+    #out_file.write('#cat $PBS_GPUFILE\n')
+    #out_file.write('b="`cat $PBS_GPUFILE | cut -c13`"\n')
+    #out_file.write('export CUDA_VISIBLE_DEVICES=$b\n')
 
     out_file.write('source /lustre/projects/p048_astro/MWA/bin/activate\n')
     out_file.write('source /home/jline/.bash_profile\n')

@@ -9,8 +9,8 @@ def write_oskar(wd=None, metafits=None, srclist=None, point_source_tag=None, tim
     start, finish = map(float,time.split(','))
     num_time_steps = int((finish - start) / float(cadence))
     
-    ##Takes around 5 mins to do one time step with 27 channels
-    hours = ceil((num_time_steps * 5) / 60.0)
+    ##Takes around 7.5 mins to do one time step with 27 channels
+    hours = ceil((num_time_steps * 7.5) / 60.0)
     
     file_name = 'qsub_%s_band%02d_t%d-%d.sh' %(point_source_tag,band_num,start,finish)
     out_file = open(file_name,'w+')

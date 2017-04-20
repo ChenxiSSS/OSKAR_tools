@@ -464,6 +464,6 @@ for chan in good_chans:
         run_command(cmd)
         
     cmd = "rm %s" %sky_osm_name
-    #run_command(cmd)
+    run_command(cmd)
         
 chdir(cwd)

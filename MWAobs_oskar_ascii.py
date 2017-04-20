@@ -2,7 +2,7 @@
 from subprocess import call
 from sys import exit
 from optparse import OptionParser
-from os import environ,getcwd,chdir
+from os import environ,getcwd,chdir,makedirs,path
 from numpy import zeros, pi, sin, cos, real, imag, loadtxt, array, floor, arange
 from ephem import Observer
 from cmath import exp
@@ -378,6 +378,9 @@ tsteps = arange(start_tstep,end_tstep,dump_time)
 cwd = getcwd()
 tmp_dir = cwd+'/tmp'
 data_dir = options.data_dir
+##Check to see if data directory exists; if not create it
+if not path.exists(data_dir):
+    makedirs(data_dir)
 
 outname = options.output_name
 

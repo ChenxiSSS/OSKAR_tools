@@ -23,12 +23,12 @@ parser.add_option('-i', '--ini_file', default=False, help='Enter template oskar 
 parser.add_option('-n','--output_name', help='Enter prefix name for outputs')
 parser.add_option('-s','--srclist', help='Enter location and name of the RTS srclist to use as a sky model')
 parser.add_option('-d','--debug',default=False,action='store_true', help='Enable to debug with print statements')
-parser.add_option('-o','--data_dir', help='Where to output the finished uvfits')
+parser.add_option('-o','--data_dir', help='Where to output the finished uvfits - default is ./data',default=False)
 parser.add_option('-m','--metafits', help='Enter name of metafits file to base obs on')
 parser.add_option('-t','--time', help='Enter start,end of sim in seconds from the beginning of the observation (as set by metafits)')
 parser.add_option('-x','--twosec', default=False, help='Enable to force a different time cadence - enter the time in seconds')
 parser.add_option('-f','--healpix', default=False, help='Enter healpix tag to use base images')
-parser.add_option('-a','--telescope', default='$OSKAR_TOOLS/telescopes/MWA_phase1', help='Enter telescope used for simulation. Default = $OSKAR_TOOLS/telescopes/MWA_phase1')
+parser.add_option('-a','--telescope', default='%s/telescopes/MWA_phase1' %OSKAR_dir, help='Enter telescope used for simulation. Default = $OSKAR_TOOLS/telescopes/MWA_phase1')
 parser.add_option('-b','--band_num', help='Enter band number to simulate')
 
 options, args = parser.parse_args()
@@ -364,7 +364,7 @@ else:
 good_chans = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29]
 #good_chans = xrange(32)
 #good_chans = [0,1,2,3,4]
-#good_chans = [0]
+#good_chans = [2]
 
 ##Flagged channel numbers
 #bad_chans = [0,1,16,30,31]
@@ -377,7 +377,13 @@ tsteps = arange(start_tstep,end_tstep,dump_time)
 
 cwd = getcwd()
 tmp_dir = cwd+'/tmp'
-data_dir = options.data_dir
+if not path.exists(tmp_dir):
+    makedirs(tmp_dir)
+
+if options.data_dir:
+    data_dir = options.data_dir
+else:
+    data_dir = cwd + '/data'
 ##Check to see if data directory exists; if not create it
 if not path.exists(data_dir):
     makedirs(data_dir)
@@ -458,6 +464,6 @@ for chan in good_chans:
         run_command(cmd)
         
     cmd = "rm %s" %sky_osm_name
-    run_command(cmd)
+    #run_command(cmd)
         
 chdir(cwd)

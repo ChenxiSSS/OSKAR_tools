@@ -1,4 +1,4 @@
-from numpy import log,pi,arcsin,sin,cos,isnan
+from numpy import log,pi,arcsin,sin,cos,isnan,nan,sqrt
 from optparse import OptionParser
 from sys import exit
 
@@ -12,6 +12,9 @@ options, args = parser.parse_args()
 
 extrap_freq = float(options.extrap_freq)
 
+##Convert catalogue/OSKAR gaussians into RTS gaussians
+fudge = sqrt(pi**2 / (2*log(2)))
+
 ##Class to store source information with - set to lists
 ##to store component info in the same place
 class rts_source():
@@ -23,6 +26,9 @@ class rts_source():
         self.fluxs = []
         self.SIs = []
         self.extrap_fluxs = []
+        self.pas = []
+        self.majors = []
+        self.minors = []
         
 def find_SI(freqs,fluxs,extrap_freq):
     '''f1/f2 = (nu1/n2)**alpha
@@ -32,7 +38,16 @@ def find_SI(freqs,fluxs,extrap_freq):
     extrap_flux = fluxs[0]*(extrap_freq/freqs[0])**alpha
     return alpha,extrap_flux
 
-def create_sources(source):
+def create_sources(split_source):
+    
+    source = rts_source()
+    
+    ##Find the primary source info - even if no comps, this will isolate
+    ##primary source infomation
+    primary_info = split_source.split('COMPONENT')[0].split('\n')
+    primary_info = [info for info in primary_info if info!='']
+    meh,prim_name,prim_ra,prim_dec = primary_info[0].split()
+    
     ##Put in to the source class
     source.name = prim_name
     source.ras.append(float(prim_ra)*15.0)
@@ -40,10 +55,27 @@ def create_sources(source):
     ##Find the fluxes and append to the source class
     prim_freqs = []
     prim_fluxs = []
+    yes_gauss = False
     for line in primary_info:
         if 'FREQ' in line:
             prim_freqs.append(float(line.split()[1]))
             prim_fluxs.append(float(line.split()[2]))
+        elif 'GAUSSIAN' in line:
+            yes_gauss = True
+            meh,pa,major,minor = line.split()
+            source.pas.append(float(pa))
+            ##Change from arcmin to arcsec (*60)
+            ##Convert into OSKAR major ( / fudge)
+            source.majors.append((float(major)*60.0) / fudge)
+            source.minors.append((float(minor)*60.0) / fudge)
+            
+    if yes_gauss:
+        pass
+    else:
+        source.pas.append(nan)
+        source.majors.append(nan)
+        source.minors.append(nan)
+            
     source.freqs.append(prim_freqs)
     source.fluxs.append(prim_fluxs)
     
@@ -58,6 +90,7 @@ def create_sources(source):
     for start,end in zip(comp_starts,comp_ends):
         freqs = []
         fluxs = []
+        yes_gauss = False
         for line in lines[start:end]:
             if 'COMPONENT' in line:
                 source.ras.append(float(line.split()[1]))
@@ -65,6 +98,22 @@ def create_sources(source):
             elif 'FREQ' in line:
                 freqs.append(float(line.split()[1]))
                 fluxs.append(float(line.split()[2]))
+            elif 'GAUSSIAN' in line:
+                yes_gauss = True
+                meh,pa,major,minor = line.split()
+                source.pas.append(float(pa))
+                ##Change from arcmin to arcsec (*60)
+                ##Convert into OSKAR major ( / fudge)
+                source.majors.append((float(major)*60.0) / fudge)
+                source.minors.append((float(minor)*60.0) / fudge)
+                
+        if yes_gauss:
+            pass
+        else:
+            source.pas.append(nan)
+            source.majors.append(nan)
+            source.minors.append(nan)
+                
         source.fluxs.append(fluxs)
         source.freqs.append(freqs)
     
@@ -108,37 +157,17 @@ oskar_outfile = open(options.osmname,'w+')
 ##Go through all sources in the source list, gather their information, extrapolate
 ##the flux to the central frequency and weight by the beam at that position
 for split_source in rts_srcs:
-    source = rts_source()
-    
-    ##Find the primary source info - even if no comps, this will isolate
-    ##primary source infomation
-    primary_info = split_source.split('COMPONENT')[0].split('\n')
-    primary_info = [info for info in primary_info if info!='']
-    meh,prim_name,prim_ra,prim_dec = primary_info[0].split()
-    ##---------------------------------------------------------
-    ##If wanted, can put in a distance from pointing loop here using the
-    ##prim_ra, prim_dec
-    
-    ##Or some kind of below horizon test - however this maths adds more time
-    ##than possible saving from less sources.
-    #LST = 357.4914637875
-    #dr = pi/180.0
-    #RA = float(prim_ra)*15.0
-    #DEC = float(prim_dec)
-    ###Find altitude and include if above 1 deg below horizon
-    #alt = arcsin(sin(DEC*dr)*sin(-26.703319*dr)+cos(DEC*dr)*cos(-26.703319*dr)*cos((LST-RA)*dr))
-    ##alts.append(alt)
 
-    #if alt>(-1.0*dr):
-    rts_src = create_sources(source)
-    ##---------------------------------------------------------
-    
+    rts_src = create_sources(split_source)
     ##Format of oskar osm file - put in the extrapolated flux and SI at the observational frequency
     #  RA,    Dec,   I,    Q,    U,    V,   freq0, spix,  RM,      maj,      min,      pa
     # (deg), (deg), (Jy), (Jy), (Jy), (Jy), (Hz), (-), (rad/m^2), (arcsec), (arcsec), (deg)
     
     for i in xrange(len(rts_src.ras)):
-        oskar_outfile.write('%.10f %.10f %.10f 0 0 0 %.5f %.3f 0.0 0 0 0\n' %(rts_src.ras[i],rts_src.decs[i],rts_src.extrap_fluxs[i],extrap_freq,rts_src.SIs[i]))
+        if isnan(rts_src.pas[i]) == True:
+            oskar_outfile.write('%.10f %.10f %.10f 0 0 0 %.5f %.3f 0.0 0 0 0\n' %(rts_src.ras[i],rts_src.decs[i],rts_src.extrap_fluxs[i],extrap_freq,rts_src.SIs[i]))
+        else:
+            oskar_outfile.write('%.10f %.10f %.10f 0 0 0 %.5f %.3f 0.0 %.2f %.2f %.1f\n' %(rts_src.ras[i],rts_src.decs[i],rts_src.extrap_fluxs[i],extrap_freq,rts_src.SIs[i],rts_src.majors[i],rts_src.minors[i],rts_src.pas[i]))
     
 oskar_outfile.close()    
     

@@ -41,7 +41,6 @@ def run_command(cmd):
     if debug: print cmd
     call(cmd,shell=True)
     
-
 ##Open the metafits file and get the relevant info
 try:
     import pyfits
@@ -197,15 +196,35 @@ def calc_jdcal(date):
     ##For some reason jdcal gives you the date in two pieces
     ##Gives you the time up until midnight of the day
     jd1,jd2 = gcal2jd(year,month,day)
-    
     jd3 = (hour + (mins / 60.0) + (secs / 3600.0)) / 24.0
-    
+
     jd = jd1 + jd2 + jd3
+    
+    jd_day = jd1 + floor(jd2)
+    jd_fraction = (jd2 - floor(jd2)) + jd3
     
     ##The header of the uvdata file takes the integer, and
     ##then the fraction goes into the data array for PTYPE5
+    return jd_day, jd_fraction
+
+#def calc_jdcal(date):
+    #dmy, hms = date.split()
     
-    return floor(jd), jd - floor(jd)
+    #day,month,year = map(int,dmy.split('-'))
+    #hour,mins,secs = map(float,hms.split(':'))
+
+    ###For some reason jdcal gives you the date in two pieces
+    ###Gives you the time up until midnight of the day
+    #jd1,jd2 = gcal2jd(year,month,day)
+    
+    #jd3 = (hour + (mins / 60.0) + (secs / 3600.0)) / 24.0
+    
+    #jd = jd1 + jd2 + jd3
+    
+    ###The header of the uvdata file takes the integer, and
+    ###then the fraction goes into the data array for PTYPE5
+    
+    #return floor(jd), jd - floor(jd)
     
 
 ##OSKAR phase tracks, but the MWA correlator doesn't, so we have to undo
@@ -453,8 +472,6 @@ for tstep in tsteps:
         ##If less than second time step, RTS needs a different naming convention
         prefix_name = "%s_band%02d_%.3f" %(outname,band_num,tstep)
         
-        
-        
         ##Start at the first good_chan freq, and do enough chans to cover first good chan to last good chan
         num_channels = good_chans[-1] - good_chans[0]
         oskar_channels = arange(good_chans[0],good_chans[0]+num_channels+1)
@@ -542,11 +559,8 @@ for tstep in tsteps:
             create_uvfits(freq_cent=freq_cent, ra_point=ra, dec_point=MWA_LAT, oskar_vis_tag=oskar_vis_tag, output_uvfits_name=output_uvfits_name, date=time)
             
             cmd = "rm %s*txt" %prefix_name
-            run_command(cmd)
+            #run_command(cmd)
             
-        #cmd = "rm %s" %sky_osm_name
-        #run_command(cmd)
-
 if options.osm:
     pass
 else:

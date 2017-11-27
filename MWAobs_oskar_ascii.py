@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 from subprocess import call
 from sys import exit
 from optparse import OptionParser
@@ -106,7 +106,7 @@ template_ini = open(template_ini).read().split('\n')
 ##Unflagged channel numbers
 good_chans = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29]
 #good_chans = xrange(32)
-#good_chans = [2]
+#good_chans = [0]
 
 ##Flagged channel numbers
 #bad_chans = [0,1,16,30,31]
@@ -522,6 +522,7 @@ def the_main_loop(tsteps=None):
             for chan in good_chans:
                 ##Take the band base_freq and add on fine channel freq
                 freq = base_freq + (chan*ch_width)
+                
                 if time_int < 1:
                     prefix_name = "%s_%.3f_%05.2f" %(outname,freq/1e+6,tstep)
                 else:
@@ -611,7 +612,7 @@ def the_main_loop(tsteps=None):
                     ##time - /(24*60*60) because julian number is a fraction of a whole day
                     adjust_float_jd_array = float_jd_array + (tstep / (24.0*60.0*60.0))
                     date_array[array_time_loc:array_time_loc+num_baselines] = adjust_float_jd_array
-                
+                    
                 cmd = "rm %s*txt" %prefix_name
                 run_command(cmd)
                 

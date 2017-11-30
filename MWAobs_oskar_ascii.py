@@ -8,6 +8,7 @@ from numpy import exp as n_exp
 from ephem import Observer
 from cmath import exp
 from jdcal import gcal2jd
+from struct import unpack
 try:
     import pyfits as fits
 except ImportError:
@@ -17,6 +18,7 @@ OSKAR_dir = environ['OSKAR_TOOLS']
 R2D = 180.0 / pi
 D2R = pi / 180.0
 MWA_LAT = -26.7033194444
+VELC = 299792458.0
 
 parser = OptionParser()
 
@@ -106,7 +108,7 @@ template_ini = open(template_ini).read().split('\n')
 ##Unflagged channel numbers
 good_chans = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29]
 #good_chans = xrange(32)
-#good_chans = [0]
+#good_chans = [2]
 
 ##Flagged channel numbers
 #bad_chans = [0,1,16,30,31]
@@ -212,8 +214,30 @@ def rotate_phase(wws=None,visibilities=None):
     rotated_visis = visibilities * phase_rotate
     
     return rotated_visis
+
+def get_uvw_data(d_single=None,d_double=None,num_baselines=None,block=None):
+    '''Takes the format of the OSKAR binary data, and pulls out the u, v, or w data
+    Returns the data in metres'''
+    uvw_data = zeros(num_baselines)
     
-        
+    if d_single:
+        ##single precision, number is 4 bytes long
+        uvw_inds = arange(0,4*num_baselines,4)
+    elif d_double:
+        ##double precision, number is 8 bytes long
+        uvw_inds = arange(0,8*num_baselines,8)
+    else:
+        print "J Line hasn't coded to deal with the data type in the OSKAR binary. Have coded in single and double precision (float and double) but not int or char. Exiting"
+        exit(0)
+    
+    for ind in xrange(num_baselines):
+        if d_single:
+            uvw_data[ind] = unpack('<f',block[uvw_inds[ind]:uvw_inds[ind]+4])[0]
+        elif d_double:
+            uvw_data[ind] = unpack('<d',block[uvw_inds[ind]:uvw_inds[ind]+8])[0]
+    
+    return uvw_data
+
 def get_osk_data(oskar_vis_tag=None,polarisation=None):
     OSK = loadtxt('%s_%s.txt' %(oskar_vis_tag,polarisation))
 
@@ -225,6 +249,148 @@ def get_osk_data(oskar_vis_tag=None,polarisation=None):
     
     return O_us,O_vs,O_ws,O_res,O_ims
 
+def read_oskar_binary(filename=None,num_vis=None,num_baselines=None):
+    '''Open the native OSKAR binary format and extracts the visibilities.
+    Returns the u,v,w coords and complex XX,XY,YX,YY arrays
+    Will ONLY work with the default OSKAR settings found in the template .ini
+    files. TODOs are needs to find the data element type (e.g. float or double),
+    the dimensions of the data etc. Currently hard-coded to defaults'''
+    
+    ##The binary format is detailed here: http://oskar.oerc.ox.ac.uk/sites/default/files/2.6/doc/OSKAR-2.6-Binary-File-Format.pdf
+    
+    ##This opens the file up into a massive string I think,
+    ##with each character representing a byte of data
+    binary_file = open(filename, mode='rb').read()
+
+    ##OSKAR splits the header as first 64 bytes
+    ##The rest in the main body
+    #header = binary_file[:64]
+    #binary_body = binary_file[64:]
+
+    ###Should tell us OSKAR binary format
+    #binary_format = header[9]
+    #print binary_format
+
+    ##Gotta find the start of each chunk using the block size from
+    ##the tag of each chunk - found from last 8 bytes of the tag
+    
+    ##First tag happens at byte 65
+    tag_indexes = [64]
+    tag_index = 64
+    block_size = 0
+    next_block_size = 0
+    
+    ##Loops over each chunk (tag + block), reading how long
+    ##each block is using the last 4 bytes of the tag
+    ##Essentially each tag spilts the data up into different data types
+    ##e.g. metadata, observation settings, actually visibilities etc
+    ##Each tag is 20 bytes in size
+    while tag_index+next_block_size+20 < len(binary_file):
+        this_tag = binary_file[tag_index:tag_index+20]
+        block_size = unpack('<Q',this_tag[12:])[0]
+        tag_index += (block_size + 20)
+        tag_indexes.append(tag_index)
+        
+        next_tag = binary_file[tag_index:tag_index+20]
+        next_block_size = unpack('<Q',next_tag[12:])[0]
+
+    ##emtpy arrays a needed values
+    #wavelength = VELC / freq
+    uu = zeros(num_vis)
+    vv = zeros(num_vis)
+    ww = zeros(num_vis)
+    
+    ##Each tag_index marks where one chunk starts - one chunk = one tag + one block
+    for tag_index in tag_indexes:
+        ##OSKAR tag is 20 bytes long, including 'TGB'. Ignore first 3 characters
+        tag =  binary_file[tag_index+3:tag_index+20]
+        
+        ##Use unpack to turn binary into numbers
+        ##The first arg identifies the type of number
+        ## '<Q' = little-endian 8-byte integer
+        ## '=b' = native signed char
+        ## '<I' = little-endian 4-byte integer
+
+        ##Get data info from the tag
+        size_of_one_element_of_payload_data = unpack('=b',tag[0])[0]
+        chunk_flag = unpack('=b',tag[1])[0]
+        
+        ##Each bit of the chunk_flag (1 byte) encodes info.
+        ##Convert to a string, and map to ints. I think the order
+        ##of the string is opposite of order written in OSKAR docs
+        ##I think.
+        extended_tag,crc_code,payload_endian,meh1,meh2,meh3,meh4,meh5 = map(int,format(chunk_flag,'08b'))
+        
+        ##Don't actually know what the extended tag does - hopefully never shows up!
+        if extended_tag:
+            group_name_size_in_bytes = unpack('=b',tag[3])[0]
+            tag_name_size_in_bytes = unpack('=b',tag[4])[0]
+        else:
+            group_ID = unpack('=b',tag[3])[0]
+            tag_ID = unpack('=b',tag[4])[0]
+
+        data_type_code = unpack('=b',tag[2])[0]
+        meh1,d_matrix,d_complex,meh2,d_double,d_single,d_int,d_char = map(int,format(data_type_code,'08b'))
+        ##The bits above specify the data type, e.g. single or double precision
+        ##Changes the number of bytes a number is stored by and is read in
+        ##by unpack
+        
+        user_specified_index = unpack('<I',tag[5:9])[0]
+        block_size = unpack('<Q',tag[9:])[0]
+        ##CRC code is some integer that helps you check for corrupted data
+        ##No idea how to read it, but want to cut it off the end if it's there
+        if crc_code:
+            block =  binary_file[tag_index+20:tag_index+20+block_size-4]
+        else:
+            block =  binary_file[tag_index+20:tag_index+20+block_size]
+        
+        ##In the OSKAR binary format, u,v,w stored under group_ID = 12, as tag_ID 4,5,6
+        ##respectively. Stored in metres so divide by wavelength for natural units
+        ##Each number is 4 bytes long
+        
+        if group_ID == 12 and tag_ID == 4:
+            uu = get_uvw_data(d_single=d_single,d_double=d_double,num_baselines=num_baselines,block=block)
+            
+        elif group_ID == 12 and tag_ID == 5:
+            vv = get_uvw_data(d_single=d_single,d_double=d_double,num_baselines=num_baselines,block=block)
+            
+        elif group_ID == 12 and tag_ID == 6:
+            ww = get_uvw_data(d_single=d_single,d_double=d_double,num_baselines=num_baselines,block=block)
+        
+        ##In the OSKAR binary format, XX,YY,XY,YX are group_ID = 12, tag_ID = 3
+        elif group_ID == 12 and tag_ID == 3:
+            
+            ##*8 because we 4 complex numbers so 4 real 4 imag
+            all_nums = zeros(8*num_vis)
+            
+            if d_single:
+                ##*4 because floats are 4 bytes long
+                visi_inds = arange(0,8*4*num_vis,4)
+            elif d_double:
+                ##*4 because floats are 8 bytes long
+                visi_inds = arange(0,8*8*num_vis,8)
+            
+            for ind in xrange(8*num_vis):
+                if d_single:
+                    all_nums[ind] = unpack('<f',block[visi_inds[ind]:visi_inds[ind]+4])[0]
+                elif d_double:
+                    all_nums[ind] = unpack('<f',block[visi_inds[ind]:visi_inds[ind]+8])[0]
+            
+            ##Split the data up by polarisation
+            xx_res = all_nums[arange(0,8*num_vis,8)]
+            xx_ims = all_nums[arange(1,8*num_vis,8)]
+            xy_res = all_nums[arange(2,8*num_vis,8)]
+            xy_ims = all_nums[arange(3,8*num_vis,8)]
+            yx_res = all_nums[arange(4,8*num_vis,8)]
+            yx_ims = all_nums[arange(5,8*num_vis,8)]
+            yy_res = all_nums[arange(6,8*num_vis,8)]
+            yy_ims = all_nums[arange(7,8*num_vis,8)]
+            
+        else:
+            pass
+            
+    return uu,vv,ww,xx_res,xx_ims,xy_res,xy_ims,yx_res,yx_ims,yy_res,yy_ims
+        
 def make_complex(re=None,im=None):
     '''Takes two arrays, and returns a complex array with re real values and im imarginary values'''
     comp = array(re,dtype=complex)
@@ -389,6 +555,17 @@ else:
     print("Exiting now")
     exit(0)
     
+def get_osk_data(oskar_vis_tag=None,polarisation=None):
+    OSK = loadtxt('%s_%s.txt' %(oskar_vis_tag,polarisation))
+
+    O_us = OSK[:,1]
+    O_vs = OSK[:,2]
+    O_ws = OSK[:,3]
+    O_res = OSK[:,4]
+    O_ims = OSK[:,5]
+    
+    return O_us,O_vs,O_ws,O_res,O_ims
+    
 #@profile
 def the_main_loop(tsteps=None):
     ##For each time step
@@ -417,55 +594,60 @@ def the_main_loop(tsteps=None):
             
             ##Start at the first good_chan freq, and do enough chans to cover first good chan to last good chan
             num_channels = good_chans[-1] - good_chans[0]
-            oskar_channels = arange(good_chans[0],good_chans[0]+num_channels+1)
-            num_channels = len(oskar_channels)
-            print "NUM CHANNELS",num_channels
-            make_ini(prefix_name=prefix_name,ra=ra,dec=MWA_LAT,freq=base_freq,start_time=time,sky_osm_name=sky_osm_name,healpix=healpix,num_channels=num_channels)
+            oskar_channels = range(good_chans[0],good_chans[0]+num_channels+1)
+            oskar_inds = [oskar_channels.index(good_chan) for good_chan in good_chans]
+            num_oskar_channels = len(oskar_channels)
+            #print "NUM CHANNELS",num_channels
+            make_ini(prefix_name=prefix_name,ra=ra,dec=MWA_LAT,freq=base_freq,start_time=time,sky_osm_name=options.osm,healpix=healpix,num_channels=num_channels)
             
             ##Run the simulation
             cmd = "oskar_sim_interferometer %s.ini" %prefix_name
             run_command(cmd)
             
-            for chan in good_chans:
-                ##Take the band base_freq and add on fine channel freq
+            ##Read in the data directly from the binary file
+            ##This file contains all frequency channels for this time step
+            num_vis = num_baselines * num_oskar_channels
+            uu,vv,ww,xx_res,xx_ims,xy_res,xy_ims,yx_res,yx_ims,yy_res,yy_ims = read_oskar_binary(filename="%s.vis" %prefix_name,num_vis=num_vis,num_baselines=num_baselines)
+            
+            ##Clean up the oskar outputs
+            cmd = "rm %s.ini %s.vis" %(prefix_name,prefix_name)
+            run_command(cmd)
+            
+            for oskar_ind,chan in zip(oskar_inds,good_chans):
+                
                 freq = base_freq + (chan*ch_width)
-                if time_int < 1:
-                    prefix_name_full = "%s_%.3f_%05.2f" %(outname,freq/1e+6,tstep)
-                else:
-                    prefix_name_full = "%s_%.3f_%02d" %(outname,freq/1e+6,int(tstep))
-                ##Convert the *.vis into an ascii that we can convert into uvfits
-                ##-c gives channel number - cannot puill out all freqeuncy info at once dammit
-                cmd = "oskar_vis_to_ascii_table -c %d -p 4 --baseline_wavelengths -h -v %s.vis %s_XX.txt" %(int(where(oskar_channels == chan)[0]),prefix_name,prefix_name_full)
-                run_command(cmd)
-                cmd = "oskar_vis_to_ascii_table -c %d -p 5 --baseline_wavelengths -h -v %s.vis %s_XY.txt" %(int(where(oskar_channels == chan)[0]),prefix_name,prefix_name_full)
-                run_command(cmd)
-                cmd = "oskar_vis_to_ascii_table -c %d -p 6 --baseline_wavelengths -h -v %s.vis %s_YX.txt" %(int(where(oskar_channels == chan)[0]),prefix_name,prefix_name_full)
-                run_command(cmd)
-                cmd = "oskar_vis_to_ascii_table -c %d -p 7 --baseline_wavelengths -h -v %s.vis %s_YY.txt" %(int(where(oskar_channels == chan)[0]),prefix_name,prefix_name_full)
-                run_command(cmd)
                 
-                ##Use the centre of the fine channel
-                freq_cent = freq + (ch_width / 2.0)
+                osk_low = oskar_ind * num_baselines
+                osk_high = (oskar_ind + 1) * num_baselines
+                ##Stored in metres in binary, convert to wavelengths
+                chan_uu = uu / (VELC / freq)
+                chan_vv = vv / (VELC / freq)
+                chan_ww = ww / (VELC / freq)
                 
-                oskar_vis_tag = "%s/%s" %(tmp_dir,prefix_name_full)
-                
-                ##READ in data from OSKAR text files
-                xx_us,xx_vs,xx_ws,xx_res,xx_ims = get_osk_data(oskar_vis_tag=oskar_vis_tag,polarisation='XX')
-                yy_us,yy_vs,yy_ws,yy_res,yy_ims = get_osk_data(oskar_vis_tag=oskar_vis_tag,polarisation='YY')
-                xy_us,xy_vs,xy_ws,xy_res,xy_ims = get_osk_data(oskar_vis_tag=oskar_vis_tag,polarisation='XY')
-                yx_us,yx_vs,yx_ws,yx_res,yx_ims = get_osk_data(oskar_vis_tag=oskar_vis_tag,polarisation='YX')
+                ##Select the correct visibilities from the binary data
+                chan_xx_res = xx_res[osk_low:osk_high]
+                chan_xx_ims = xx_ims[osk_low:osk_high]
+                chan_xy_res = xy_res[osk_low:osk_high]
+                chan_xy_ims = xy_ims[osk_low:osk_high]
+                chan_yx_res = yx_res[osk_low:osk_high]
+                chan_yx_ims = yx_ims[osk_low:osk_high]
+                chan_yy_res = yy_res[osk_low:osk_high]
+                chan_yy_ims = yy_ims[osk_low:osk_high]
                 
                 ##Make complex numpy arrays
-                comp_xx = make_complex(xx_res,xx_ims)
-                comp_xy = make_complex(xy_res,xy_ims)
-                comp_yx = make_complex(yx_res,yx_ims)
-                comp_yy = make_complex(yy_res,yy_ims)
+                comp_xx = make_complex(chan_xx_res,chan_xx_ims)
+                comp_xy = make_complex(chan_xy_res,chan_xy_ims)
+                comp_yx = make_complex(chan_yx_res,chan_yx_ims)
+                comp_yy = make_complex(chan_yy_res,chan_yy_ims)
                 
                 ##Remove the phase tracking added in by OSKAR
-                rotated_xx = rotate_phase(wws=xx_ws,visibilities=comp_xx)
-                rotated_xy = rotate_phase(wws=xx_ws,visibilities=comp_xy)
-                rotated_yx = rotate_phase(wws=xx_ws,visibilities=comp_yx)
-                rotated_yy = rotate_phase(wws=xx_ws,visibilities=comp_yy)
+                rotated_xx = rotate_phase(wws=ww,visibilities=comp_xx)
+                rotated_xy = rotate_phase(wws=ww,visibilities=comp_xy)
+                rotated_yx = rotate_phase(wws=ww,visibilities=comp_yx)
+                rotated_yy = rotate_phase(wws=ww,visibilities=comp_yy)
+    
+                ##Use the centre of the fine channel
+                freq_cent = freq + (ch_width / 2.0)
                 
                 ##Populate the v_container at the correct spots
                 v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,0,0] = real(rotated_xx)
@@ -481,23 +663,23 @@ def the_main_loop(tsteps=None):
                 v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,3,1] = imag(rotated_yx)
                 
                 ##Set the weights of everything to ones
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,0,2] = ones(len(xx_us))
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,1,2] = ones(len(xx_us))
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,2,2] = ones(len(xx_us))
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,3,2] = ones(len(xx_us))
+                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,0,2] = ones(len(uu))
+                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,1,2] = ones(len(uu))
+                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,2,2] = ones(len(uu))
+                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,3,2] = ones(len(uu))
                 
                 ##Only set the u,v,w to the central frequency channel
                 ##Header of uvfits has to match central_freq_chan + 1 (uvfits 1 ordered, python zero ordered)
                 if chan == central_freq_chan:
                     central_freq_chan_value = freq_cent
                     ##u,v,w stored in seconds by uvfits files
-                    uu = xx_us / freq_cent
-                    vv = xx_vs / freq_cent
-                    ww = xx_ws / freq_cent
+                    chan_uu /= freq_cent
+                    chan_vv /= freq_cent
+                    chan_ww /= freq_cent
                     
-                    uus[array_time_loc:array_time_loc+num_baselines] = uu
-                    vvs[array_time_loc:array_time_loc+num_baselines] = vv
-                    wws[array_time_loc:array_time_loc+num_baselines] = ww
+                    uus[array_time_loc:array_time_loc+num_baselines] = chan_uu
+                    vvs[array_time_loc:array_time_loc+num_baselines] = chan_vv
+                    wws[array_time_loc:array_time_loc+num_baselines] = chan_ww
                     
                     ##Fill in the baselines using the first time and freq uvfits
                     baselines_array[array_time_loc:array_time_loc+num_baselines] = array(template_data['BASELINE'])
@@ -507,13 +689,6 @@ def the_main_loop(tsteps=None):
                     adjust_float_jd_array = float_jd_array + (tstep / (24.0*60.0*60.0))
                     date_array[array_time_loc:array_time_loc+num_baselines] = adjust_float_jd_array
                 
-                cmd = "rm %s*txt" %prefix_name_full
-                run_command(cmd)
-                
-            ##Clean up the oskar outputs
-            cmd = "rm %s.ini %s.vis" %(prefix_name,prefix_name)
-            run_command(cmd)
-            
         ##If we want other sky model behaviours, i.e. curvature to the spectrum,
         ##must generate a sky model for every fine channel. Two methods: RTS style
         ##extrepolation between points, or use a fit of a 2nd order polynomial
@@ -522,7 +697,6 @@ def the_main_loop(tsteps=None):
             for chan in good_chans:
                 ##Take the band base_freq and add on fine channel freq
                 freq = base_freq + (chan*ch_width)
-                
                 if time_int < 1:
                     prefix_name = "%s_%.3f_%05.2f" %(outname,freq/1e+6,tstep)
                 else:
@@ -535,31 +709,14 @@ def the_main_loop(tsteps=None):
                 cmd = "oskar_sim_interferometer %s.ini" %prefix_name
                 run_command(cmd)
                 
-                ##Convert the *.vis into an ascii that we can convert into uvfits
-                cmd = "oskar_vis_to_ascii_table -p 4 --baseline_wavelengths -h -v %s.vis %s_XX.txt" %(prefix_name,prefix_name)
-                run_command(cmd)
-                cmd = "oskar_vis_to_ascii_table -p 5 --baseline_wavelengths -h -v %s.vis %s_XY.txt" %(prefix_name,prefix_name)
-                run_command(cmd)
-                cmd = "oskar_vis_to_ascii_table -p 6 --baseline_wavelengths -h -v %s.vis %s_YX.txt" %(prefix_name,prefix_name)
-                run_command(cmd)
-                cmd = "oskar_vis_to_ascii_table -p 7 --baseline_wavelengths -h -v %s.vis %s_YY.txt" %(prefix_name,prefix_name)
-                run_command(cmd)
+                ##Read in the data directly from the binary file
+                ##Only one freq channel so number of vis is number of baselines
+                uu,vv,ww,xx_res,xx_ims,xy_res,xy_ims,yx_res,yx_ims,yy_res,yy_ims = read_oskar_binary(filename="%s.vis" %prefix_name,num_vis=num_baselines,num_baselines=num_baselines)
                 
-                ##Clean up the oskar outputs apart from ms set
-                cmd = "rm %s.ini %s.vis" %(prefix_name,prefix_name)
-                run_command(cmd)
-
-                ##Use the centre of the fine channel
-                freq_cent = freq + (ch_width / 2.0)
-                
-                oskar_vis_tag = "%s/%s" %(tmp_dir,prefix_name)
-                output_uvfits_name = "%s/%s.uvfits" %(data_dir,prefix_name)
-                
-                ##READ in data from OSKAR text files
-                xx_us,xx_vs,xx_ws,xx_res,xx_ims = get_osk_data(oskar_vis_tag=oskar_vis_tag,polarisation='XX')
-                yy_us,yy_vs,yy_ws,yy_res,yy_ims = get_osk_data(oskar_vis_tag=oskar_vis_tag,polarisation='YY')
-                xy_us,xy_vs,xy_ws,xy_res,xy_ims = get_osk_data(oskar_vis_tag=oskar_vis_tag,polarisation='XY')
-                yx_us,yx_vs,yx_ws,yx_res,yx_ims = get_osk_data(oskar_vis_tag=oskar_vis_tag,polarisation='YX')
+                ##Stored in metres in binary, convert to wavelengths
+                uu /= (VELC / freq)
+                vv /= (VELC / freq)
+                ww /= (VELC / freq)
                 
                 ##Make complex numpy arrays
                 comp_xx = make_complex(xx_res,xx_ims)
@@ -568,10 +725,20 @@ def the_main_loop(tsteps=None):
                 comp_yy = make_complex(yy_res,yy_ims)
                 
                 ##Remove the phase tracking added in by OSKAR
-                rotated_xx = rotate_phase(wws=xx_ws,visibilities=comp_xx)
-                rotated_xy = rotate_phase(wws=xx_ws,visibilities=comp_xy)
-                rotated_yx = rotate_phase(wws=xx_ws,visibilities=comp_yx)
-                rotated_yy = rotate_phase(wws=xx_ws,visibilities=comp_yy)
+                rotated_xx = rotate_phase(wws=ww,visibilities=comp_xx)
+                rotated_xy = rotate_phase(wws=ww,visibilities=comp_xy)
+                rotated_yx = rotate_phase(wws=ww,visibilities=comp_yx)
+                rotated_yy = rotate_phase(wws=ww,visibilities=comp_yy)
+    
+                ##Clean up the oskar outputs
+                cmd = "rm %s.ini %s.vis" %(prefix_name,prefix_name)
+                run_command(cmd)
+
+                ##Use the centre of the fine channel
+                freq_cent = freq + (ch_width / 2.0)
+                
+                oskar_vis_tag = "%s/%s" %(tmp_dir,prefix_name)
+                output_uvfits_name = "%s/%s.uvfits" %(data_dir,prefix_name)
                 
                 ##Populate the v_container at the correct spots
                 v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,0,0] = real(rotated_xx)
@@ -587,19 +754,19 @@ def the_main_loop(tsteps=None):
                 v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,3,1] = imag(rotated_yx)
                 
                 ##Set the weights of everything to ones
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,0,2] = ones(len(xx_us))
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,1,2] = ones(len(xx_us))
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,2,2] = ones(len(xx_us))
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,3,2] = ones(len(xx_us))
+                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,0,2] = ones(len(uu))
+                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,1,2] = ones(len(uu))
+                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,2,2] = ones(len(uu))
+                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,3,2] = ones(len(uu))
                 
                 ##Only set the u,v,w to the central frequency channel
                 ##Header of uvfits has to match central_freq_chan + 1 (uvfits 1 ordered, python zero ordered)
                 if chan == central_freq_chan:
                     central_freq_chan_value = freq_cent
                     ##u,v,w stored in seconds by uvfits files
-                    uu = xx_us / freq_cent
-                    vv = xx_vs / freq_cent
-                    ww = xx_ws / freq_cent
+                    uu /= freq_cent
+                    vv /= freq_cent
+                    ww /= freq_cent
                     
                     uus[array_time_loc:array_time_loc+num_baselines] = uu
                     vvs[array_time_loc:array_time_loc+num_baselines] = vv
@@ -612,9 +779,6 @@ def the_main_loop(tsteps=None):
                     ##time - /(24*60*60) because julian number is a fraction of a whole day
                     adjust_float_jd_array = float_jd_array + (tstep / (24.0*60.0*60.0))
                     date_array[array_time_loc:array_time_loc+num_baselines] = adjust_float_jd_array
-                    
-                cmd = "rm %s*txt" %prefix_name
-                run_command(cmd)
                 
     output_uvfits_name = "%s/%s_t%02d_f%.3f_band%02d.uvfits" %(data_dir,outname,time_int,ch_width/1e+6,band_num)
     print "Now creating uvfits file %s" %output_uvfits_name

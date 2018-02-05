@@ -2,19 +2,24 @@
 from subprocess import call
 from sys import exit
 from optparse import OptionParser
-from os import environ,getcwd,chdir,makedirs,path
 from numpy import zeros, pi, sin, cos, real, imag, loadtxt, array, floor, arange, ones, where
 from numpy import exp as n_exp
 from ephem import Observer
 from cmath import exp
-from jdcal import gcal2jd
+from sys import path as sys_path
+try:
+    from jdcal import gcal2jd
+except ImportError:
+    sys_path.append('/lustre/projects/p048_astro/jline/software/jdcal-1.3')
+    from jdcal import gcal2jd
+    
+from os import environ,getcwd,chdir,makedirs,path
 from struct import unpack
 try:
-    import pyfits as fits
-except ImportError:
-    from astropy.io import fits
+    OSKAR_dir = environ['OSKAR_TOOLS']
+except:
+    OSKAR_dir = '/lustre/projects/p048_astro/jline/software/OSKAR_tools'
 
-OSKAR_dir = environ['OSKAR_TOOLS']
 R2D = 180.0 / pi
 D2R = pi / 180.0
 MWA_LAT = -26.7033194444
@@ -31,7 +36,7 @@ parser.add_option('-d','--debug',default=False,action='store_true', help='Enable
 parser.add_option('-o','--data_dir', help='Where to output the finished uvfits - default is ./data',default=False)
 parser.add_option('-m','--metafits', help='Enter name of metafits file to base obs on')
 parser.add_option('-t','--time', help='Enter start,end of sim in seconds from the beginning of the observation (as set by metafits)')
-parser.add_option('-x','--time_int', default=False, help='Enable to force a different time cadence - enter the time in seconds')
+parser.add_option('-x','--time_int', default=False, help='Enable to force a different time cadence from that in the metafits - enter the time in seconds')
 parser.add_option('-f','--healpix', default=False, help='Enter healpix tag to use base images')
 parser.add_option('-a','--telescope', default='%s/telescopes/MWA_phase1' %OSKAR_dir, help='Enter telescope used for simulation. Default = $OSKAR_TOOLS/telescopes/MWA_phase1')
 parser.add_option('-b','--band_num', help='Enter band number to simulate')
@@ -44,13 +49,15 @@ def run_command(cmd):
     call(cmd,shell=True)
     
 ##Open the metafits file and get the relevant info
-try:
-    import pyfits
-except ImportError:
-    import astropy.io.fits as pyfits
+#try:
+    #import pyfits
+#except ImportError:
+    #import astropy.io.fits as pyfits
+    
+from astropy.io import fits
 
 try:
-    f=pyfits.open(options.metafits)
+    f=fits.open(options.metafits)
 except Exception,e:
     print 'Unable to open metafits file %s: %s' % (options.metafits,e)
     exit(1)

@@ -42,23 +42,16 @@ def write_oskar(wd=None, metafits=None, srclist=None, point_source_tag=None, tim
     
     
     def add_modules(filename=None):
-        filename.write('source /home/jline/.bash_profile\n')
+        #filename.write('/home/jline/.bash_profile\n')
         filename.write('module load python\n')
         filename.write('module load gcc\n')
         filename.write('export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda-5.5/lib64\n')
-        filename.write('export PATH=/lustre/projects/p048_astro/jline/software/OSKAR-2.6.1-Source/build/apps/:$PATH\n')
+        filename.write('export PATH=/lustre/projects/p048_astro/jline/software/OSKAR-2.7.0-Source/build/gstar_install/bin/:$PATH\n')
+        filename.write('export LD_LIBRARY_PATH=/lustre/projects/p048_astro/jline/software/OSKAR-2.7.0-Source/build/gstar_install/lib:$LD_LIBRARY_PATH\n')
         
     add_modules(filename=run1)
     add_modules(filename=run2)
     
-    
-    #run2.write('source /lustre/projects/p048_astro/MWA/bin/activate\n')
-    run2.write('source /home/jline/.bash_profile\n')
-    run2.write('module load python\n')
-    run2.write('export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda-5.5/lib64\n')
-    run2.write('module load gcc\n')
-    run2.write('export PATH=/lustre/projects/p048_astro/jline/software/OSKAR-2.6.1-Source/build/apps/:$PATH\n')
-
     def write_oskar_command(band_num=None,runfile=None):
         oskar_options = "--metafits=%s --srclist=%s --output_name=%s --time=%s --band_num=%s --debug --data_dir=%s" %(metafits, srclist, point_source_tag, time, band_num, data_dir)
         if telescope:

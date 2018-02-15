@@ -120,6 +120,7 @@ def create_sources(split_source):
     ##Mimic the way that the RTS would try to extrapolate the flux of the source
     ##to the observational frequency
     for freqs,fluxs in zip(source.freqs,source.fluxs):
+        print freqs,fluxs
         ##If one flux, assume -0.7 like the RTS
         if len(freqs)==1:
             SI = -0.7
@@ -133,7 +134,7 @@ def create_sources(split_source):
         ##Otherwise, choose the two frequencies above and below, and extrap between them
         else:
             for i in xrange(len(freqs)-1):
-                if freqs[i]<extrap_freq and freqs[i+1]>extrap_freq:
+                if freqs[i]<=extrap_freq and freqs[i+1]>extrap_freq or freqs[i]<extrap_freq and freqs[i+1]>=extrap_freq:
                     
                     #print source.name, freqs[i],freqs[i+1],fluxs[i],fluxs[i+1]
                     
@@ -150,8 +151,9 @@ def create_sources(split_source):
         
 rts_srcs = open(options.srclist,'r').read().split('ENDSOURCE')
 del rts_srcs[-1]
-        
-        
+
+#print rts_srcs
+
 oskar_outfile = open(options.osmname,'w+')
 #sources = []
 ##Go through all sources in the source list, gather their information, extrapolate

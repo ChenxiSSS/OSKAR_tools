@@ -2,7 +2,7 @@
 from subprocess import call
 from sys import exit
 from optparse import OptionParser
-from numpy import zeros, pi, sin, cos, real, imag, loadtxt, array, floor, arange, ones, where
+from numpy import zeros, pi, sin, cos, real, imag, loadtxt, array, floor, arange, ones, where, savetxt
 from numpy import exp as n_exp
 from ephem import Observer
 from cmath import exp
@@ -108,8 +108,8 @@ template_ini = open(template_ini).read().split('\n')
 good_chans = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29]
 central_freq_chan = 15
 #good_chans = xrange(32)
-good_chans = [2,3]
-central_freq_chan = 2
+#good_chans = [2,3]
+#central_freq_chan = 2
 
 ##Flagged channel numbers
 #bad_chans = [0,1,16,30,31]
@@ -186,7 +186,7 @@ else:
 ###Create a copy of the telescope model===============================
 ##Add in a permitted_beams.txt file to stop the beam phase tracking
 ##If requested, flag dipoles via metafits file TODO
-cmd = 'cp -r %s %s/telescope'
+#cmd = 'cp -r %s %s/telescope'
 
 
     
@@ -218,7 +218,8 @@ def the_main_loop(tsteps=None):
             
             ##Start at the first good_chan freq, and do enough chans to cover first good chan to last good chan
             num_channels = len(good_chans)
-            oskar_channels = range(good_chans[0],good_chans[0]+num_channels+1)
+            oskar_channels = range(good_chans[0],good_chans[-1]+1)
+            
             oskar_inds = [oskar_channels.index(good_chan) for good_chan in good_chans]
             num_oskar_channels = len(oskar_channels)
             #print "NUM CHANNELS",num_channels
@@ -226,9 +227,9 @@ def the_main_loop(tsteps=None):
             #osk_low_freq = base_freq
             
             make_ini(prefix_name=prefix_name,ra=ra,dec=MWA_LAT,freq=osk_low_freq,start_time=time,
-                     sky_osm_name=options.osm,healpix=healpix,num_channels=num_oskar_channels,
-                     template_ini=template_ini,ch_width=ch_width,time_int=time_int,
-                     telescope_dir=telescope_dir)
+                    sky_osm_name=options.osm,healpix=healpix,num_channels=num_oskar_channels,
+                    template_ini=template_ini,ch_width=ch_width,time_int=time_int,
+                    telescope_dir=telescope_dir,num_time_steps=1,obs_time_length=time_int)
             
             ##Run the simulation
             cmd = "oskar_sim_interferometer --quiet %s.ini" %prefix_name
@@ -236,8 +237,11 @@ def the_main_loop(tsteps=None):
             
             ##Read in the data directly from the binary file
             ##This file contains all frequency channels for this time step
-            num_vis = num_baselines * num_oskar_channels
-            uu,vv,ww,xx_res,xx_ims,xy_res,xy_ims,yx_res,yx_ims,yy_res,yy_ims = read_oskar_binary(filename="%s.vis" %prefix_name,num_vis=num_vis,num_baselines=num_baselines)
+            #num_vis = num_baselines * num_oskar_channels
+            uu,vv,ww,xx_res,xx_ims,xy_res,xy_ims,yx_res,yx_ims,yy_res,yy_ims = read_oskar_binary(filename="%s.vis" %prefix_name,num_time_steps=1,num_channels=num_oskar_channels,num_baselines=num_baselines)
+            
+            #cmd = "oskar_vis_to_ascii_table -p 4 %s.vis" %prefix_name
+            #run_command(cmd)
             
             ##Clean up the oskar outputs
             cmd = "rm %s.ini %s.vis" %(prefix_name,prefix_name)
@@ -263,6 +267,17 @@ def the_main_loop(tsteps=None):
                 chan_yy_res = yy_res[osk_low:osk_high]
                 chan_yy_ims = yy_ims[osk_low:osk_high]
                 
+                #if oskar_ind == 0:
+                    #info = zeros((8128,5))
+                    #info[:,0] = uu
+                    #info[:,1] = vv
+                    #info[:,2] = ww
+                    #info[:,3] = chan_xx_res
+                    #info[:,4] = chan_xx_ims
+                    
+                    #savetxt('%s_jlconvert.txt' %prefix_name,info)
+                
+                
                 ##Make complex numpy arrays
                 comp_xx = make_complex(chan_xx_res,chan_xx_ims)
                 comp_xy = make_complex(chan_xy_res,chan_xy_ims)
@@ -274,6 +289,8 @@ def the_main_loop(tsteps=None):
                 rotated_xy = rotate_phase(wws=chan_ww,visibilities=comp_xy)
                 rotated_yx = rotate_phase(wws=chan_ww,visibilities=comp_yx)
                 rotated_yy = rotate_phase(wws=chan_ww,visibilities=comp_yy)
+                
+                #print oskar_ind,chan_ww[112],freq,comp_xx[112],rotated_xx[112]
     
                 ##Use the centre of the fine channel
                 freq_cent = freq + (ch_width / 2.0)

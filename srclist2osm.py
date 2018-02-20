@@ -93,7 +93,7 @@ def create_sources(split_source):
         yes_gauss = False
         for line in lines[start:end]:
             if 'COMPONENT' in line:
-                source.ras.append(float(line.split()[1]))
+                source.ras.append(float(line.split()[1])*15.0)
                 source.decs.append(float(line.split()[2]))
             elif 'FREQ' in line:
                 freqs.append(float(line.split()[1]))
@@ -120,7 +120,6 @@ def create_sources(split_source):
     ##Mimic the way that the RTS would try to extrapolate the flux of the source
     ##to the observational frequency
     for freqs,fluxs in zip(source.freqs,source.fluxs):
-        print freqs,fluxs
         ##If one flux, assume -0.7 like the RTS
         if len(freqs)==1:
             SI = -0.7
@@ -135,9 +134,6 @@ def create_sources(split_source):
         else:
             for i in xrange(len(freqs)-1):
                 if freqs[i]<=extrap_freq and freqs[i+1]>extrap_freq or freqs[i]<extrap_freq and freqs[i+1]>=extrap_freq:
-                    
-                    #print source.name, freqs[i],freqs[i+1],fluxs[i],fluxs[i+1]
-                    
                     SI,ext_flux = find_SI([freqs[i],freqs[i+1]],[fluxs[i],fluxs[i+1]],extrap_freq)
         
         source.SIs.append(SI)

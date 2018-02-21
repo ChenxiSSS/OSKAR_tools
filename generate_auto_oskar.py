@@ -6,7 +6,8 @@ from numpy import ceil,floor
 
 OSKAR_dir = os.environ['OSKAR_TOOLS']
 
-def write_oskar(wd=None, metafits=None, srclist=None, point_source_tag=None, time=None, job_bands=None, data_dir=None, telescope=None, time_int=None, ini_file=None, jobs_per_GPU=None):
+def write_oskar(wd=None, metafits=None, srclist=None, point_source_tag=None, time=None, job_bands=None, 
+                data_dir=None, telescope=None, time_int=None, ini_file=None, jobs_per_GPU=None,flag_dipoles=None):
     '''Writes a bash script for each course band to run OSKAR'''
     
     start, finish = map(float,time.split(','))
@@ -53,13 +54,24 @@ def write_oskar(wd=None, metafits=None, srclist=None, point_source_tag=None, tim
     add_modules(filename=run2)
     
     def write_oskar_command(band_num=None,runfile=None):
-        oskar_options = "--metafits=%s --srclist=%s --output_name=%s --time=%s --band_num=%s --debug --data_dir=%s" %(metafits, srclist, point_source_tag, time, band_num, data_dir)
+        oskar_options = "--metafits=%s --output_name=%s --time=%s --band_num=%s --debug --data_dir=%s" %(metafits, point_source_tag, time, band_num, data_dir)
+        if srclist:
+            oskar_options += ' --srclist=%s' %srclist
+        elif osm:
+            oskar_options += ' --osm=%s' %osm
+        else:
+            print "Neither a srclist nor an osm model provided - you have nothing to simulate! Exiting"
+            exit()
+        
+        
         if telescope:
             oskar_options += ' --telescope=%s' %telescope
         if time_int:
             oskar_options += ' --time_int=%s' %time_int
         if ini_file:
             oskar_options += ' --ini_file=%s' %ini_file
+        if flag_dipoles:
+            oskar_options += ' --flag_dipoles'
         
         runfile.write('time %s/MWAobs_oskar_ascii.py %s &\n' %(OSKAR_dir, oskar_options))
         
@@ -73,7 +85,7 @@ def write_oskar(wd=None, metafits=None, srclist=None, point_source_tag=None, tim
     run2.close()
     
     ##Do the fancy CUDA mpi control thing and actually run all the jobs
-    out_file.write('time source %s/quick_oskar.sh %s %s\n' %(OSKAR_dir,run1_name,run2_name))
+    out_file.write('time source %s/run_mps_oskar.sh %s %s\n' %(OSKAR_dir,run1_name,run2_name))
     out_file.write('wait\n')
     out_file.write('rm %s %s %s' %(file_name,run1_name,run2_name))
     out_file.close()
@@ -117,18 +129,23 @@ def write_oskar(wd=None, metafits=None, srclist=None, point_source_tag=None, tim
 
 parser = OptionParser()
 
-parser.add_option('-o', '--output_dir', default=False, help='Enter output data directory')
-parser.add_option('-m', '--metafits', default=False, help='Enter metafits file to base observation on')
-parser.add_option('-t', '--time', default=False, help='Enter start,finish times relative to metafits date (seconds - i.e. 0 to start at beginnning')
-parser.add_option('-c', '--time_int',default=False, help='Enter time_int of correlator to simulate (s) to override what is in metafits (i.e --time_int=2). Defaults to what is in the metafits')
-parser.add_option('-s','--srclist', default=False, help='Enter RTS srclist to use as sky model')
-parser.add_option('-p','--point_source_tag', default=False, help='Enter uvfits tag for the point source only model')
-parser.add_option('-d','--diffuse_tag', default=False, help='Enter uvfits tag for the point source + diffuse models')
-parser.add_option('-l','--diffuse_output_dir', default=False, help='Enter output data directory for diffuse - defaults to same location as point source model')
-parser.add_option('-b', '--band_nums', default='all', help='Defaults to running all 24 course bands. Alternatively, enter required numbers delineated by commas, e.g. --band_nums=1,7,9')
 parser.add_option('-a','--telescope', default=False, help='Enter telescope tag to use - default is MWA_phase1')
+parser.add_option('-b', '--band_nums', default='all', help='Defaults to running all 24 course bands. Alternatively, enter required numbers delineated by commas, e.g. --band_nums=1,7,9')
+parser.add_option('-c', '--time_int',default=False, help='Enter time_int of correlator to simulate (s) to override what is in metafits (i.e --time_int=2). Defaults to what is in the metafits')
+parser.add_option('-d','--diffuse_tag', default=False, help='Enter uvfits tag for the point source + diffuse models')
+parser.add_option('-e','--osm', default=False, help='Alternatively just use an OSKAR .osm model')
+parser.add_option('-f','--flag_dipoles',default=False,action='store_true', help='Add to switch on dipole flagging via the metafits file. NOTE needs a metafits that has the correct data within')
+
 parser.add_option('-i', '--ini_file', default=False, help='Enter template oskar .ini - defaults to the template .ini located in $OSKAR_TOOLS/telescopes/--telescope')
 parser.add_option('-j', '--jobs_per_GPU', default=4, help='How many OSKAR jobs to run per GPU - default is 4')
+parser.add_option('-l','--diffuse_output_dir', default=False, help='Enter output data directory for diffuse - defaults to same location as point source model')
+parser.add_option('-m', '--metafits', default=False, help='Enter metafits file to base observation on')
+parser.add_option('-o', '--output_dir', default=False, help='Enter output data directory')
+parser.add_option('-p','--point_source_tag', default=False, help='Enter uvfits tag for the point source only model')
+parser.add_option('-s','--srclist', default=False, help='Enter RTS srclist to use as sky model')
+parser.add_option('-t', '--time', default=False, help='Enter start,finish times relative to metafits date (seconds - i.e. 0 to start at beginnning')
+
+
 
 options, args = parser.parse_args()
 
@@ -145,7 +162,8 @@ def false_test(option,name):
 time = false_test(options.time,'"time"')
 metafits = false_test(options.metafits,'"metafits"')
 output_dir = false_test(options.output_dir,'"output_dir"')
-srclist = false_test(options.srclist,'"srclist"')
+#srclist = false_test(options.srclist,'"srclist"')
+time_int = false_test(options.time_int,'"time_int"')
 point_source_tag = false_test(options.point_source_tag,'"point_source_tag"')
 
 if options.band_nums == 'all':
@@ -160,9 +178,19 @@ else:
         exit()
 
 telescope = options.telescope
-time_int = options.time_int
 ini_file = options.ini_file
 jobs_per_GPU = int(options.jobs_per_GPU)
+srclist = options.srclist
+osm = options.osm
+flag_dipoles = options.flag_dipoles
+
+if srclist:
+    pass
+elif osm:
+    pass
+else:
+    print "Neither a srclist nor an osm model provided - you have nothing to simulate! Exiting"
+    exit()
 
 diffuse_tag = options.diffuse_tag
 
@@ -192,16 +220,14 @@ diffuse_qsubs = []
 
 num_jobs = int(floor(len(band_nums) / (2*jobs_per_GPU)))
 
-print num_jobs
-
 if num_jobs == 0:
     num_jobs = 1
 
 for job_num in xrange(num_jobs):
     job_bands = band_nums[job_num*(2*jobs_per_GPU):(job_num+1)*(2*jobs_per_GPU)]
-    print job_bands
     
-    point_qsub = write_oskar(wd=wd, metafits=metafits, srclist=srclist, point_source_tag=point_source_tag, time=time, job_bands=job_bands, data_dir=output_dir, telescope=telescope, time_int=time_int, ini_file=ini_file)
+    point_qsub = write_oskar(wd=wd, metafits=metafits, srclist=srclist, point_source_tag=point_source_tag, time=time, job_bands=job_bands, data_dir=output_dir,
+                             telescope=telescope, time_int=time_int, ini_file=ini_file, flag_dipoles=flag_dipoles)
     point_qsubs.append(point_qsub)
     
     #if diffuse_tag:

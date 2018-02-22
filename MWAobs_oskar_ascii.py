@@ -114,8 +114,8 @@ template_ini = open(template_ini).read().split('\n')
 good_chans = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29]
 central_freq_chan = 15
 #good_chans = xrange(32)
-good_chans = [2,3]
-central_freq_chan = 2
+#good_chans = [2,3]
+#central_freq_chan = 2
 
 ##Flagged channel numbers
 #bad_chans = [0,1,16,30,31]

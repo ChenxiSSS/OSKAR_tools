@@ -407,7 +407,7 @@ def the_main_loop(tsteps=None):
 
             ##Clean up the oskar outputs
             cmd = "rm %s.ini %s.vis" %(prefix_name,prefix_name)
-            #run_command(cmd)
+            run_command(cmd)
 
             ###For each time step
             for time_ind,tstep in enumerate(tsteps):
@@ -509,10 +509,10 @@ else:
         freq = base_freq + (chan*ch_width)
         ##Create ini file to run oskar
         cmd = "rm %s_%.3f.osm" %(outname,freq/1e+6)
-        #run_command(cmd)
+        run_command(cmd)
         
 cmd = 'rm -r %s/telescope_%s_band%02d' %(tmp_dir,outname,band_num)
-#run_command(cmd)
+run_command(cmd)
         
 chdir(cwd)
 template_uvfits.close()

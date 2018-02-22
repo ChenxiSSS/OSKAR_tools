@@ -49,13 +49,6 @@ parser.add_option('-t','--time', help='Enter start,end of sim in seconds from th
 parser.add_option('-x','--time_int', default=False, help='Enable to force a different time cadence from that in the metafits - enter the time in seconds')
 
 
-
-
-
-'%s/telescopes/MWA_phase1/MWATools-antenna_locations.txt' %OSKAR_dir
-
-
-
 options, args = parser.parse_args()
 debug = options.debug
 
@@ -121,13 +114,11 @@ template_ini = open(template_ini).read().split('\n')
 good_chans = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29]
 central_freq_chan = 15
 #good_chans = xrange(32)
-#good_chans = [2,3]
-#central_freq_chan = 2
+good_chans = [2,3]
+central_freq_chan = 2
 
 ##Flagged channel numbers
 #bad_chans = [0,1,16,30,31]
-
-
 
 band_num = int(options.band_num)
 base_freq = ((band_num - 1)*(b_width/24.0)) + low_freq
@@ -219,10 +210,9 @@ else:
     ##Just copy the template telescope
     cmd = 'cp -r %s %s/telescope_%s_band%02d' %(telescope_dir,tmp_dir,outname,band_num)
     run_command(cmd)
+    #OSKAR naturally beam forms towards phase centre
+    #Read the pointing from the metafits and force observation towards single pointing
     
-    ##OSKAR naturally beam forms towards phase centre
-    ##Read the pointing from the metafits and force observation towards single pointing
-
     permitted = open('%s/station/permitted_beams.txt' %(telescope_dir),'w+')
     permitted.write('%.5f %.5f' %(azimuth,altitude))
     permitted.close
@@ -288,15 +278,10 @@ def the_main_loop(tsteps=None):
         
         ###For each time step
         for time_ind,tstep in enumerate(tsteps):
-            time = add_time(oskar_date,tstep)
             ##Precess ra by time since the beginning of the observation 
             ##(convert time to angle, change from seconds to degrees)
             ##Include half of the time step
-            
-            ##DO NOT ADD ON HALF A TIME STEP - I *think* OSKAR does this internally
-            #ra = initial_ra_point + (((tstep + time_int/2.0)*SOLAR2SIDEREAL)*(15/3600.0))
-            ra = initial_ra_point + (((tstep)*SOLAR2SIDEREAL)*(15/3600.0))
-            if ra >=360.0: ra -= 360.0
+            time = add_time(oskar_date,tstep)
             
             ##Need to know where in the uvfits file structure to put data
             array_time_loc = num_baselines*time_ind
@@ -422,23 +407,17 @@ def the_main_loop(tsteps=None):
 
             ##Clean up the oskar outputs
             cmd = "rm %s.ini %s.vis" %(prefix_name,prefix_name)
-            run_command(cmd)
+            #run_command(cmd)
 
             ###For each time step
             for time_ind,tstep in enumerate(tsteps):
-                time = add_time(oskar_date,tstep)
                 ##Precess ra by time since the beginning of the observation 
                 ##(convert time to angle, change from seconds to degrees)
                 ##Include half of the time step
-                
-                ##DO NOT ADD ON HALF A TIME STEP - I *think* OSKAR does this internally
-                #ra = initial_ra_point + (((tstep + time_int/2.0)*SOLAR2SIDEREAL)*(15/3600.0))
-                ra = initial_ra_point + (((tstep)*SOLAR2SIDEREAL)*(15/3600.0))
-                if ra >=360.0: ra -= 360.0
+                time = add_time(oskar_date,tstep)
                 
                 ##Need to know where in the uvfits file structure to put data
                 array_time_loc = num_baselines*time_ind
-
                 time_ind_lower = time_ind*num_baselines
                 
                 ##Stored in metres in binary, convert to wavelengths
@@ -468,8 +447,6 @@ def the_main_loop(tsteps=None):
                 rotated_yx = rotate_phase(wws=chan_ww,visibilities=comp_yx)
                 rotated_yy = rotate_phase(wws=chan_ww,visibilities=comp_yy)
                 
-                #print oskar_ind,chan_ww[112],freq,comp_xx[112],rotated_xx[112]
-
                 ##Use the centre of the fine channel
                 freq_cent = freq + (ch_width / 2.0)
                 
@@ -532,10 +509,10 @@ else:
         freq = base_freq + (chan*ch_width)
         ##Create ini file to run oskar
         cmd = "rm %s_%.3f.osm" %(outname,freq/1e+6)
-        run_command(cmd)
+        #run_command(cmd)
         
 cmd = 'rm -r %s/telescope_%s_band%02d' %(tmp_dir,outname,band_num)
-run_command(cmd)
+#run_command(cmd)
         
 chdir(cwd)
 template_uvfits.close()

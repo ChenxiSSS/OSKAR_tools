@@ -2,7 +2,7 @@
 from subprocess import call
 from sys import exit
 from optparse import OptionParser
-from numpy import zeros, pi, sin, cos, real, imag, loadtxt, array, floor, arange, ones, where, savetxt
+from numpy import zeros, pi, sin, cos, real, imag, loadtxt, array, floor, arange, ones, where, savetxt, mod
 from numpy import exp as n_exp
 from ephem import Observer
 from cmath import exp
@@ -10,6 +10,7 @@ from sys import path as sys_path
 try:
     from jdcal import gcal2jd
 except ImportError:
+    ##horrible gstar specific fix
     sys_path.append('/lustre/projects/p048_astro/jline/software/jdcal-1.3')
     from jdcal import gcal2jd
 from os import environ,getcwd,chdir,makedirs,path
@@ -17,6 +18,7 @@ from struct import unpack
 try:
     OSKAR_dir = environ['OSKAR_TOOLS']
 except:
+    ##horrible gstar specific fix
     OSKAR_dir = '/lustre/projects/p048_astro/jline/software/OSKAR_tools'
 sys_path.append(OSKAR_dir)
 from MWAobs_oskar_ascii_lib import *
@@ -40,6 +42,7 @@ parser.add_option('-f','--healpix', default=False, help='Enter healpix tag to us
 parser.add_option('-g','--fit_osm', default=False, help='Location of sky parameters to create osm from')
 parser.add_option('-i', '--ini_file', default=False, help='Enter template oskar .ini - defaults to the template .ini located in $OSKAR_TOOLS/telescopes/--telescope')
 parser.add_option('-j','--flag_dipoles',default=False,action='store_true', help='Add to switch on dipole flagging via the metafits file. NOTE needs a metafits that has the correct data within')
+parser.add_option('-k','--do_phase_track',default=False,action='store_true', help='Add to leave on the phase tracking done by OSKAR')
 
 parser.add_option('-o','--data_dir', help='Where to output the finished uvfits - default is ./data',default=False)
 parser.add_option('-m','--metafits', help='Enter name of metafits file to base obs on')
@@ -47,6 +50,12 @@ parser.add_option('-n','--output_name', help='Enter prefix name for outputs')
 parser.add_option('-s','--srclist', default=False, help='Enter location and name of the RTS srclist to use as a sky model')
 parser.add_option('-t','--time', help='Enter start,end of sim in seconds from the beginning of the observation (as set by metafits)')
 parser.add_option('-x','--time_int', default=False, help='Enable to force a different time cadence from that in the metafits - enter the time in seconds')
+
+parser.add_option('--oskar_gsm', default=False, action='store_true',help='Add to include the gsm as calculated by OSKAR')
+parser.add_option('--oskar_gsm_SI', default=-2.5, help='The spectral index to give the gsm made by OSKAR')
+parser.add_option('--oskar_gsm_file', default='%s/gsm/component_maps_408locked.dat' %OSKAR_dir, help='The de Oliveira-Costa model file to use - defaults to $OSKAR_TOOLS/gsm/component_maps_408locked.dat')
+parser.add_option('--retain_vis_file',default=False,action='store_true', help='Add to not delete the oskar binary .vis files')
+parser.add_option('--retain_ini_file',default=False,action='store_true', help='Add to not delete the oskar binary .ini files')
 
 
 options, args = parser.parse_args()
@@ -101,8 +110,35 @@ telescope_dir = options.telescope
 telescope_name = options.telescope.split('/')[-1]
 template_uvfits = fits.open("%s/template_%s.uvfits" %(telescope_dir,telescope_name))
 template_data = template_uvfits[0].data
+template_baselines = template_uvfits[0].data['BASELINE'].copy()
 num_baselines = len(template_data)
 num_freq_channels = 32
+
+oskar_gsm = options.oskar_gsm
+oskar_gsm_file = options.oskar_gsm_file
+oskar_gsm_SI = float(options.oskar_gsm_SI)
+
+antennas = {}
+xyz = template_uvfits[1].data['STABXYZ'].copy()
+for i in xrange(len(xyz)):
+    antennas['ANT%03d' %(i+1)] = xyz[i]
+
+x_lengths = []
+y_lengths = []
+z_lengths = []
+
+for baseline in template_baselines:
+    ant2 = mod(baseline, 256)
+    ant1 = (baseline - ant2)/256
+    x_length,y_length,z_length = antennas['ANT%03d' %ant1] - antennas['ANT%03d' %ant2]
+    x_lengths.append(x_length)
+    y_lengths.append(y_length)
+    z_lengths.append(z_length)
+
+x_lengths = array(x_lengths)
+y_lengths = array(y_lengths)
+z_lengths = array(z_lengths)
+
 
 if options.ini_file:
     template_ini = options.ini_file
@@ -143,6 +179,12 @@ if not path.exists(data_dir):
     makedirs(data_dir)
 
 outname = options.output_name
+
+if options.do_phase_track:
+    undo_phase_track = False
+else:
+    undo_phase_track = True
+
 
 ##Sidereal seconds per solar seconds - ie if 1s passes on
 ##the clock, sky has moved by 1.00274 secs of angle
@@ -255,7 +297,8 @@ def the_main_loop(tsteps=None):
         make_ini(prefix_name=prefix_name,ra=initial_ra_point,dec=MWA_LAT,freq=osk_low_freq,start_time=oskar_date,
                     sky_osm_name=options.osm,healpix=healpix,num_channels=num_oskar_channels,
                     template_ini=template_ini,ch_width=ch_width,time_int=time_int,
-                    telescope_dir=telescope_dir,num_time_steps=num_time_steps,obs_time_length=obs_time_length)
+                    telescope_dir=telescope_dir,num_time_steps=num_time_steps,obs_time_length=obs_time_length,
+                    oskar_gsm=oskar_gsm,oskar_gsm_file=oskar_gsm_file,oskar_gsm_SI=oskar_gsm_SI)
         
         ##Run the simulation
         cmd = "oskar_sim_interferometer --quiet %s.ini" %prefix_name
@@ -273,8 +316,14 @@ def the_main_loop(tsteps=None):
         #run_command(cmd)
         
         ##Clean up the oskar outputs
-        cmd = "rm %s.ini %s.vis" %(prefix_name,prefix_name)
-        run_command(cmd)
+        if options.retain_vis_file and options.retain_ini_file:
+            pass
+        elif options.retain_vis_file:
+            cmd = "rm %s.ini" %(prefix_name)
+        elif options.retain_ini_file:
+            cmd = "rm %s.vis" %(prefix_name)
+        else:
+            cmd = "rm %s.ini %s.vis" %(prefix_name,prefix_name)
         
         ###For each time step
         for time_ind,tstep in enumerate(tsteps):
@@ -283,91 +332,23 @@ def the_main_loop(tsteps=None):
             ##Include half of the time step
             time = add_time(oskar_date,tstep)
             
-            ##Need to know where in the uvfits file structure to put data
-            array_time_loc = num_baselines*time_ind
-
             ##If we are using a sky model with fixed spectral indexes, can run all
             ##frequencies using the same osm model, and so only need to run OSKAR once
             ##per time step
-        
             for oskar_ind,chan in zip(oskar_inds,good_chans):
                 freq = base_freq + (chan*ch_width)
                 
-                time_ind_lower = time_ind*num_baselines
-                
-                osk_low = (num_oskar_channels*time_ind_lower) + oskar_ind * num_baselines
-                osk_high = (num_oskar_channels*time_ind_lower) + (oskar_ind + 1) * num_baselines
-                ##Stored in metres in binary, convert to wavelengths
-                chan_uu = uu[time_ind_lower:time_ind_lower+num_baselines] / (VELC / freq)
-                chan_vv = vv[time_ind_lower:time_ind_lower+num_baselines] / (VELC / freq)
-                chan_ww = ww[time_ind_lower:time_ind_lower+num_baselines] / (VELC / freq)
-                
-                ##Select the correct visibilities from the binary data
-                chan_xx_res = xx_res[osk_low:osk_high]
-                chan_xx_ims = xx_ims[osk_low:osk_high]
-                chan_xy_res = xy_res[osk_low:osk_high]
-                chan_xy_ims = xy_ims[osk_low:osk_high]
-                chan_yx_res = yx_res[osk_low:osk_high]
-                chan_yx_ims = yx_ims[osk_low:osk_high]
-                chan_yy_res = yy_res[osk_low:osk_high]
-                chan_yy_ims = yy_ims[osk_low:osk_high]
-                
-                ##Make complex numpy arrays
-                comp_xx = make_complex(chan_xx_res,chan_xx_ims)
-                comp_xy = make_complex(chan_xy_res,chan_xy_ims)
-                comp_yx = make_complex(chan_yx_res,chan_yx_ims)
-                comp_yy = make_complex(chan_yy_res,chan_yy_ims)
-                
-                ##Remove the phase tracking added in by OSKAR
-                rotated_xx = rotate_phase(wws=chan_ww,visibilities=comp_xx)
-                rotated_xy = rotate_phase(wws=chan_ww,visibilities=comp_xy)
-                rotated_yx = rotate_phase(wws=chan_ww,visibilities=comp_yx)
-                rotated_yy = rotate_phase(wws=chan_ww,visibilities=comp_yy)
-                
-                #print oskar_ind,chan_ww[112],freq,comp_xx[112],rotated_xx[112]
-
-                ##Use the centre of the fine channel
-                freq_cent = freq + (ch_width / 2.0)
-                
-                ##Populate the v_container at the correct spots
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,0,0] = real(rotated_xx)
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,0,1] = imag(rotated_xx)
-                
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,1,0] = real(rotated_yy)
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,1,1] = imag(rotated_yy)
-                
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,2,0] = real(rotated_xy)
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,2,1] = imag(rotated_xy)
-                
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,3,0] = real(rotated_yx)
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,3,1] = imag(rotated_yx)
-                
-                ##Set the weights of everything to ones
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,0,2] = ones(len(chan_uu))
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,1,2] = ones(len(chan_uu))
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,2,2] = ones(len(chan_uu))
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,3,2] = ones(len(chan_uu))
-                
-                ##Only set the u,v,w to the central frequency channel
-                ##Header of uvfits has to match central_freq_chan + 1 (uvfits 1 ordered, python zero ordered)
                 if chan == central_freq_chan:
+                    freq_cent = freq + (ch_width / 2.0)
                     central_freq_chan_value = freq_cent
-                    ##u,v,w stored in seconds by uvfits files
-                    chan_uu /= freq_cent
-                    chan_vv /= freq_cent
-                    chan_ww /= freq_cent
-                    
-                    uus[array_time_loc:array_time_loc+num_baselines] = chan_uu
-                    vvs[array_time_loc:array_time_loc+num_baselines] = chan_vv
-                    wws[array_time_loc:array_time_loc+num_baselines] = chan_ww
-                    
-                    ##Fill in the baselines using the first time and freq uvfits
-                    baselines_array[array_time_loc:array_time_loc+num_baselines] = array(template_data['BASELINE'])
-                    
-                    ##Fill in the fractional julian date, after adding on the appropriate amount of
-                    ##time - /(24*60*60) because julian number is a fraction of a whole day
-                    adjust_float_jd_array = float_jd_array + (tstep / (24.0*60.0*60.0))
-                    date_array[array_time_loc:array_time_loc+num_baselines] = adjust_float_jd_array
+                
+                add_data_to_uvfits(v_container=v_container,time_ind=time_ind,num_baselines=num_baselines,template_baselines=template_baselines,
+                    chan=chan,num_oskar_channels=num_oskar_channels,oskar_ind=oskar_ind,uu=uu,vv=vv,ww=ww,float_jd_array=float_jd_array,
+                    baselines_array=baselines_array,date_array=date_array,undo_phase_track=undo_phase_track,xx_res=xx_res,xx_ims=xx_ims,
+                    xy_res=xy_res,xy_ims=xy_ims,yx_res=yx_res,yx_ims=yx_ims,yy_res=yy_res,yy_ims=yy_ims,
+                    x_lengths=x_lengths,y_lengths=y_lengths,z_lengths=z_lengths,uus=uus,vvs=vvs,wws=wws,
+                    tstep=tstep,freq=freq,ch_width=ch_width,central_freq_chan=central_freq_chan)
+                
             
     ##If we want other sky model behaviours, i.e. curvature to the spectrum,
     ##must generate a sky model for every fine channel. Two methods: RTS style
@@ -376,6 +357,11 @@ def the_main_loop(tsteps=None):
     else:
         ###For frequency channel in band
         for chan in good_chans:
+            
+            if chan == central_freq_chan:
+                freq_cent = freq + (ch_width / 2.0)
+                central_freq_chan_value = freq_cent
+            
             ##Take the band base_freq and add on fine channel freq
             freq = base_freq + (chan*ch_width)
             prefix_name = "%s_%.3f" %(outname,freq/1e+6)
@@ -389,7 +375,8 @@ def the_main_loop(tsteps=None):
             make_ini(prefix_name=prefix_name,ra=initial_ra_point,dec=MWA_LAT,freq=freq,start_time=oskar_date,
                     sky_osm_name=sky_osm_name,healpix=healpix,num_channels=1,
                     template_ini=template_ini,ch_width=ch_width,time_int=time_int,
-                    telescope_dir=telescope_dir,num_time_steps=num_time_steps,obs_time_length=obs_time_length)
+                    telescope_dir=telescope_dir,num_time_steps=num_time_steps,obs_time_length=obs_time_length,
+                    oskar_gsm=oskar_gsm,oskar_gsm_file=oskar_gsm_file,oskar_gsm_SI=oskar_gsm_SI)
             
             ##Run the simulation
             cmd = "oskar_sim_interferometer --quiet %s.ini" %prefix_name
@@ -406,89 +393,25 @@ def the_main_loop(tsteps=None):
             uu,vv,ww,xx_res,xx_ims,xy_res,xy_ims,yx_res,yx_ims,yy_res,yy_ims = read_oskar_binary(filename="%s.vis" %prefix_name,num_time_steps=num_time_steps,num_channels=1,num_baselines=num_baselines)
 
             ##Clean up the oskar outputs
-            cmd = "rm %s.ini %s.vis" %(prefix_name,prefix_name)
-            run_command(cmd)
+            if options.retain_vis_file and options.retain_ini_file:
+                pass
+            elif options.retain_vis_file:
+                cmd = "rm %s.ini" %(prefix_name)
+            elif options.retain_ini_file:
+                cmd = "rm %s.vis" %(prefix_name)
+            else:
+                cmd = "rm %s.ini %s.vis" %(prefix_name,prefix_name)
 
             ###For each time step
             for time_ind,tstep in enumerate(tsteps):
                 ##Precess ra by time since the beginning of the observation 
                 ##(convert time to angle, change from seconds to degrees)
                 ##Include half of the time step
-                time = add_time(oskar_date,tstep)
-                
-                ##Need to know where in the uvfits file structure to put data
-                array_time_loc = num_baselines*time_ind
-                time_ind_lower = time_ind*num_baselines
-                
-                ##Stored in metres in binary, convert to wavelengths
-                chan_uu = uu[time_ind_lower:time_ind_lower+num_baselines] / (VELC / freq)
-                chan_vv = vv[time_ind_lower:time_ind_lower+num_baselines] / (VELC / freq)
-                chan_ww = ww[time_ind_lower:time_ind_lower+num_baselines] / (VELC / freq)
-                
-                ##Select the correct visibilities from the binary data
-                chan_xx_res = xx_res[time_ind_lower:time_ind_lower+num_baselines]
-                chan_xx_ims = xx_ims[time_ind_lower:time_ind_lower+num_baselines]
-                chan_xy_res = xy_res[time_ind_lower:time_ind_lower+num_baselines]
-                chan_xy_ims = xy_ims[time_ind_lower:time_ind_lower+num_baselines]
-                chan_yx_res = yx_res[time_ind_lower:time_ind_lower+num_baselines]
-                chan_yx_ims = yx_ims[time_ind_lower:time_ind_lower+num_baselines]
-                chan_yy_res = yy_res[time_ind_lower:time_ind_lower+num_baselines]
-                chan_yy_ims = yy_ims[time_ind_lower:time_ind_lower+num_baselines]
-                
-                ##Make complex numpy arrays
-                comp_xx = make_complex(chan_xx_res,chan_xx_ims)
-                comp_xy = make_complex(chan_xy_res,chan_xy_ims)
-                comp_yx = make_complex(chan_yx_res,chan_yx_ims)
-                comp_yy = make_complex(chan_yy_res,chan_yy_ims)
-                
-                ##Remove the phase tracking added in by OSKAR
-                rotated_xx = rotate_phase(wws=chan_ww,visibilities=comp_xx)
-                rotated_xy = rotate_phase(wws=chan_ww,visibilities=comp_xy)
-                rotated_yx = rotate_phase(wws=chan_ww,visibilities=comp_yx)
-                rotated_yy = rotate_phase(wws=chan_ww,visibilities=comp_yy)
-                
-                ##Use the centre of the fine channel
-                freq_cent = freq + (ch_width / 2.0)
-                
-                ##Populate the v_container at the correct spots
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,0,0] = real(rotated_xx)
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,0,1] = imag(rotated_xx)
-                
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,1,0] = real(rotated_yy)
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,1,1] = imag(rotated_yy)
-                
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,2,0] = real(rotated_xy)
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,2,1] = imag(rotated_xy)
-                
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,3,0] = real(rotated_yx)
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,3,1] = imag(rotated_yx)
-                
-                ##Set the weights of everything to ones
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,0,2] = ones(len(chan_uu))
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,1,2] = ones(len(chan_uu))
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,2,2] = ones(len(chan_uu))
-                v_container[array_time_loc:array_time_loc+num_baselines,0,0,0,chan,3,2] = ones(len(chan_uu))
-                
-                ##Only set the u,v,w to the central frequency channel
-                ##Header of uvfits has to match central_freq_chan + 1 (uvfits 1 ordered, python zero ordered)
-                if chan == central_freq_chan:
-                    central_freq_chan_value = freq_cent
-                    ##u,v,w stored in seconds by uvfits files
-                    chan_uu /= freq_cent
-                    chan_vv /= freq_cent
-                    chan_ww /= freq_cent
-                    
-                    uus[array_time_loc:array_time_loc+num_baselines] = chan_uu
-                    vvs[array_time_loc:array_time_loc+num_baselines] = chan_vv
-                    wws[array_time_loc:array_time_loc+num_baselines] = chan_ww
-                    
-                    ##Fill in the baselines using the first time and freq uvfits
-                    baselines_array[array_time_loc:array_time_loc+num_baselines] = array(template_data['BASELINE'])
-                    
-                    ##Fill in the fractional julian date, after adding on the appropriate amount of
-                    ##time - /(24*60*60) because julian number is a fraction of a whole day
-                    adjust_float_jd_array = float_jd_array + (tstep / (24.0*60.0*60.0))
-                    date_array[array_time_loc:array_time_loc+num_baselines] = adjust_float_jd_array
+                add_data_to_uvfits(v_container=v_container,time_ind=time_ind,num_baselines=num_baselines,template_baselines=template_baselines,
+                    chan=chan,uu=uu,vv=vv,ww=ww,float_jd_array=float_jd_array,baselines_array=baselines_array,date_array=date_array,
+                    undo_phase_track=undo_phase_track,xx_res=xx_res,xx_ims=xx_ims,xy_res=xy_res,xy_ims=xy_ims,yx_res=yx_res,
+                    yx_ims=yx_ims,yy_res=yy_res,yy_ims=yy_ims,x_lengths=x_lengths,y_lengths=y_lengths,z_lengths=z_lengths,
+                    uus=uus,vvs=vvs,wws=wws,tstep=tstep,freq=freq,ch_width=ch_width,central_freq_chan=central_freq_chan)
                 
     output_uvfits_name = "%s/%s_t%02d_f%.3f_band%02d.uvfits" %(data_dir,outname,time_int,ch_width/1e+6,band_num)
     print "Now creating uvfits file %s" %output_uvfits_name

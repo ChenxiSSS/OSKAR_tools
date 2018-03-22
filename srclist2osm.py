@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from numpy import log,pi,arcsin,sin,cos,isnan,nan,sqrt
 from optparse import OptionParser
 from sys import exit
@@ -155,17 +156,19 @@ oskar_outfile = open(options.osmname,'w+')
 ##Go through all sources in the source list, gather their information, extrapolate
 ##the flux to the central frequency and weight by the beam at that position
 for split_source in rts_srcs:
-
-    rts_src = create_sources(split_source)
-    ##Format of oskar osm file - put in the extrapolated flux and SI at the observational frequency
-    #  RA,    Dec,   I,    Q,    U,    V,   freq0, spix,  RM,      maj,      min,      pa
-    # (deg), (deg), (Jy), (Jy), (Jy), (Jy), (Hz), (-), (rad/m^2), (arcsec), (arcsec), (deg)
-    
-    for i in xrange(len(rts_src.ras)):
-        if isnan(rts_src.pas[i]) == True:
-            oskar_outfile.write('%.10f %.10f %.10f 0 0 0 %.5f %.3f 0.0 0 0 0\n' %(rts_src.ras[i],rts_src.decs[i],rts_src.extrap_fluxs[i],extrap_freq,rts_src.SIs[i]))
-        else:
-            oskar_outfile.write('%.10f %.10f %.10f 0 0 0 %.5f %.3f 0.0 %.2f %.2f %.1f\n' %(rts_src.ras[i],rts_src.decs[i],rts_src.extrap_fluxs[i],extrap_freq,rts_src.SIs[i],rts_src.majors[i],rts_src.minors[i],rts_src.pas[i]))
+    if 'SHAPELET' in split_source:
+        pass
+    else:
+        rts_src = create_sources(split_source)
+        ##Format of oskar osm file - put in the extrapolated flux and SI at the observational frequency
+        #  RA,    Dec,   I,    Q,    U,    V,   freq0, spix,  RM,      maj,      min,      pa
+        # (deg), (deg), (Jy), (Jy), (Jy), (Jy), (Hz), (-), (rad/m^2), (arcsec), (arcsec), (deg)
+        
+        for i in xrange(len(rts_src.ras)):
+            if isnan(rts_src.pas[i]) == True:
+                oskar_outfile.write('%.10f %.10f %.10f 0 0 0 %.5f %.3f 0.0 0 0 0\n' %(rts_src.ras[i],rts_src.decs[i],rts_src.extrap_fluxs[i],extrap_freq,rts_src.SIs[i]))
+            else:
+                oskar_outfile.write('%.10f %.10f %.10f 0 0 0 %.5f %.3f 0.0 %.2f %.2f %.1f\n' %(rts_src.ras[i],rts_src.decs[i],rts_src.extrap_fluxs[i],extrap_freq,rts_src.SIs[i],rts_src.majors[i],rts_src.minors[i],rts_src.pas[i]))
     
 oskar_outfile.close()    
     

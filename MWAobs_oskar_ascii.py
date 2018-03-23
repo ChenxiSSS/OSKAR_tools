@@ -318,12 +318,14 @@ def the_main_loop(tsteps=None):
         ##Clean up the oskar outputs
         if options.retain_vis_file and options.retain_ini_file:
             pass
-        elif options.retain_vis_file:
-            cmd = "rm %s.ini" %(prefix_name)
-        elif options.retain_ini_file:
-            cmd = "rm %s.vis" %(prefix_name)
         else:
-            cmd = "rm %s.ini %s.vis" %(prefix_name,prefix_name)
+            if options.retain_vis_file:
+                cmd = "rm %s.ini" %(prefix_name)
+            elif options.retain_ini_file:
+                cmd = "rm %s.vis" %(prefix_name)
+            else:
+                cmd = "rm %s.ini %s.vis" %(prefix_name,prefix_name)
+            run_command(cmd)
         
         ###For each time step
         for time_ind,tstep in enumerate(tsteps):
@@ -395,12 +397,14 @@ def the_main_loop(tsteps=None):
             ##Clean up the oskar outputs
             if options.retain_vis_file and options.retain_ini_file:
                 pass
-            elif options.retain_vis_file:
-                cmd = "rm %s.ini" %(prefix_name)
-            elif options.retain_ini_file:
-                cmd = "rm %s.vis" %(prefix_name)
             else:
-                cmd = "rm %s.ini %s.vis" %(prefix_name,prefix_name)
+                if options.retain_vis_file:
+                    cmd = "rm %s.ini" %(prefix_name)
+                elif options.retain_ini_file:
+                    cmd = "rm %s.vis" %(prefix_name)
+                else:
+                    cmd = "rm %s.ini %s.vis" %(prefix_name,prefix_name)
+                run_command(cmd)
 
             ###For each time step
             for time_ind,tstep in enumerate(tsteps):

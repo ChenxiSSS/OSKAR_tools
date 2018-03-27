@@ -21,7 +21,7 @@ except:
     ##horrible gstar specific fix
     OSKAR_dir = '/lustre/projects/p048_astro/jline/software/OSKAR_tools'
 sys_path.append(OSKAR_dir)
-from MWAobs_oskar_ascii_lib import *
+from MWAobs_oskar_lib import *
 from astropy.io import fits
 
 R2D = 180.0 / pi
@@ -76,13 +76,13 @@ def test_avail(key):
         print 'Cannot find %s in %s' % (key,options.metafits)
         exit(1)
 
-for key in ['DATE-OBS','FREQCENT','FINECHAN','INTTIME','BANDWDTH','AZIMUTH','ALTITUDE']:
+for key in ['DATE-OBS','FREQCENT','FINECHAN','INTTIME','BANDWDTH','AZIMUTH','ALTITUDE','RA','DEC']:
     test_avail(key)
 
 
-intial_date = f[0].header['DATE-OBS']
+initial_date = f[0].header['DATE-OBS']
 ##Change in to oskar date format
-date,time = intial_date.split('T')
+date,time = initial_date.split('T')
 year,month,day = date.split('-')
 oskar_date = "%s-%s-%s %s" %(day,month,year,time)
 
@@ -99,11 +99,13 @@ low_freq = freqcent - (b_width/2) - (ch_width/2)
 MRO = Observer()
 ##Set the observer at Boolardy
 MRO.lat, MRO.long, MRO.elevation = '-26:42:11.95', '116:40:14.93', 0
-date,time = intial_date.split('T')
+date,time = initial_date.split('T')
 MRO.date = '/'.join(date.split('-'))+' '+time
-intial_lst = float(MRO.sidereal_time())*R2D
-initial_ra_point = float(MRO.sidereal_time())*R2D
-dec_point = MWA_LAT
+initial_lst = float(MRO.sidereal_time())*R2D
+#initial_ra_point = float(MRO.sidereal_time())*R2D
+#dec_point = MWA_LAT
+initial_ra_point = float(f[0].header['RA'])
+dec_point = float(f[0].header['DEC'])
 
 healpix = options.healpix
 telescope_dir = options.telescope
@@ -248,13 +250,18 @@ else:
 if options.flag_dipoles:
     create_flagged_telescope(metafits=options.metafits,antenna_coord_file=options.antenna_coord_file,azimuth=azimuth,altitude=altitude,
                                 telescope_dir='%s/telescope_%s_band%02d' %(tmp_dir,outname,band_num))
+    ##Reset the telescope_dir to copied location
+    telescope_dir = '%s/telescope_%s_band%02d' %(tmp_dir,outname,band_num)
 else:
     ##Just copy the template telescope
     cmd = 'cp -r %s %s/telescope_%s_band%02d' %(telescope_dir,tmp_dir,outname,band_num)
     run_command(cmd)
+    
+    ##Reset the telescope_dir to copied location
+    telescope_dir = '%s/telescope_%s_band%02d' %(tmp_dir,outname,band_num)
+    
     #OSKAR naturally beam forms towards phase centre
     #Read the pointing from the metafits and force observation towards single pointing
-    
     permitted = open('%s/station/permitted_beams.txt' %(telescope_dir),'w+')
     permitted.write('%.5f %.5f' %(azimuth,altitude))
     permitted.close
@@ -294,7 +301,7 @@ def the_main_loop(tsteps=None):
         
         #oskar_date
         
-        make_ini(prefix_name=prefix_name,ra=initial_ra_point,dec=MWA_LAT,freq=osk_low_freq,start_time=oskar_date,
+        make_ini(prefix_name=prefix_name,ra=initial_ra_point,dec=dec_point,freq=osk_low_freq,start_time=oskar_date,
                     sky_osm_name=options.osm,healpix=healpix,num_channels=num_oskar_channels,
                     template_ini=template_ini,ch_width=ch_width,time_int=time_int,
                     telescope_dir=telescope_dir,num_time_steps=num_time_steps,obs_time_length=obs_time_length,
@@ -374,7 +381,7 @@ def the_main_loop(tsteps=None):
             num_time_steps = len(tsteps)
             obs_time_length = num_time_steps * time_int
 
-            make_ini(prefix_name=prefix_name,ra=initial_ra_point,dec=MWA_LAT,freq=freq,start_time=oskar_date,
+            make_ini(prefix_name=prefix_name,ra=initial_ra_point,dec=dec_point,freq=freq,start_time=oskar_date,
                     sky_osm_name=sky_osm_name,healpix=healpix,num_channels=1,
                     template_ini=template_ini,ch_width=ch_width,time_int=time_int,
                     telescope_dir=telescope_dir,num_time_steps=num_time_steps,obs_time_length=obs_time_length,

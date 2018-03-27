@@ -13,7 +13,7 @@ except ImportError:
     sys_path.append('/lustre/projects/p048_astro/jline/software/jdcal-1.3')
     from jdcal import gcal2jd
     
-from os import environ,getcwd,chdir,makedirs,path
+from os import environ,getcwd,chdir,makedirs,path,walk
 from struct import unpack
 try:
     OSKAR_dir = environ['OSKAR_TOOLS']
@@ -490,8 +490,9 @@ def create_uvfits(v_container=None,freq_cent=None, ra_point=None, dec_point=MWA_
     hdulist.close()
     
 def make_ini(prefix_name=None,ra=None,dec=None,freq=None,start_time=None,sky_osm_name=None,healpix=None,
-             num_channels=None,template_ini=None,ch_width=None,time_int=None,telescope_dir=None,
-             num_time_steps=None,obs_time_length=None,oskar_gsm=False,oskar_gsm_file=None,oskar_gsm_SI=None):
+            num_channels=None,template_ini=None,ch_width=None,time_int=None,telescope_dir=None,
+            num_time_steps=None,obs_time_length=None,oskar_gsm=False,oskar_gsm_file=None,
+            oskar_gsm_SI=None,save_ms=False):
     out_file = open("%s.ini" %prefix_name,'w+')
     for line in template_ini:
         if "num_channels" in line:
@@ -533,10 +534,16 @@ def make_ini(prefix_name=None,ra=None,dec=None,freq=None,start_time=None,sky_osm
                 else:
                     line = 'pass'
                     
+            elif 'ms_filename' in line:
+                if save_ms:
+                    line = 'ms_filename=%s.ms' %prefix_name
+                else:
+                    line = 'pass'
+                    
             #elif "healpix_fits" in line and "file" in line:
-            #if healpix:
-                #heal_name = healpix + '_%.3fMHz.fits' %(freq / 1.0e+6)
-                #line = "healpix_fits\\file=%s" %heal_name
+                #if healpix:
+                    #heal_name = healpix + '_%.3fMHz.fits' %(freq / 1.0e+6)
+                    #line = "healpix_fits\\file=%s" %heal_name
             else:
                 line = 'pass'
             

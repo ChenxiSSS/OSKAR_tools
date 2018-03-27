@@ -35,8 +35,8 @@ def write_oskar(wd=None, metafits=None, srclist=None, oskar_uvfits_tag=None, tim
         out_file.write('#SBATCH --gres=gpu:1\n')
         #out_file.write('#SBATCH --mincpus=16\n')
         out_file.write('#SBATCH --mem=16384\n')
-        out_file.write('source /home/jline/software/OSKAR_tools/cluster_modles/load_spartan.sh\n')
-        out_file.write('source /home/jline/software/OSKAR_tools/init_OSKAR_tools.sh\n')
+        out_file.write('source /data/cephfs/punim0411/software/OSKAR_tools/cluster_modles/load_spartan.sh\n')
+        out_file.write('source /data/cephfs/punim0411/software/OSKAR_tools/init_OSKAR_tools.sh\n')
 
     out_file.write('cd %s\n' %wd)
     

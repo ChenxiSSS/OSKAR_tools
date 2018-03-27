@@ -70,7 +70,7 @@ def write_oskar(wd=None, metafits=None, srclist=None, oskar_uvfits_tag=None, tim
         if flag_dipoles:
             oskar_options += ' --flag_dipoles'
         
-        runfile.write('%s/MWAobs_oskar_ascii.py %s &\n' %(OSKAR_dir, oskar_options))
+        runfile.write('%s/MWAobs_oskar.py %s &\n' %(OSKAR_dir, oskar_options))
         
     for band_num in job_bands[:half_of_jobs]:
         write_oskar_command(band_num=band_num,runfile=run1)

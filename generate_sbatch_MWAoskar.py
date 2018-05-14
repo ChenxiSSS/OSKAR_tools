@@ -8,7 +8,8 @@ OSKAR_dir = os.environ['OSKAR_TOOLS']
 
 def write_oskar(wd=None, metafits=None, srclist=None, oskar_uvfits_tag=None, time=None, band_num=None, 
                 data_dir=None, telescope=None, time_int=None, ini_file=None, jobs_per_GPU=None,
-                flag_dipoles=None, cluster=None,retain_vis_file=None,retain_ini_file=None):
+                flag_dipoles=None, cluster=None,retain_vis_file=None,retain_ini_file=None,
+                do_phase_track=False):
     '''Writes a bash script for each course band to run OSKAR'''
     
     start, finish = map(float,time.split(','))
@@ -73,6 +74,8 @@ def write_oskar(wd=None, metafits=None, srclist=None, oskar_uvfits_tag=None, tim
         oskar_options += ' --retain_vis_file'
     if retain_ini_file:
         oskar_options += ' --retain_ini_file'
+    if do_phase_track:
+        oskar_options += ' --do_phase_track'
     
     out_file.write('time %s/MWAobs_oskar.py %s &\n' %(OSKAR_dir, oskar_options))
         
@@ -149,6 +152,7 @@ parser.add_option('-t', '--time', default=False, help='Enter start,finish times 
 
 parser.add_option('--retain_vis_file',default=False,action='store_true', help='Add to not delete the oskar binary .vis files')
 parser.add_option('--retain_ini_file',default=False,action='store_true', help='Add to not delete the oskar binary .ini files')
+parser.add_option('--do_phase_track',default=False,action='store_true', help='Add to leave on the phase tracking done by OSKAR')
 
 
 
@@ -190,6 +194,7 @@ osm = options.osm
 flag_dipoles = options.flag_dipoles
 retain_vis_file = options.retain_vis_file
 retain_ini_file = options.retain_ini_file
+do_phase_track = options.do_phase_track
 
 if srclist:
     pass
@@ -226,7 +231,7 @@ majick_slurms = []
 for band_num in band_nums:
     oskar_slurm = write_oskar(wd=wd, metafits=metafits, srclist=srclist, oskar_uvfits_tag=oskar_uvfits_tag, time=time, band_num=band_num, data_dir=output_dir,
         telescope=telescope, time_int=time_int, ini_file=ini_file, flag_dipoles=flag_dipoles, cluster=options.cluster, retain_vis_file=retain_vis_file,
-        retain_ini_file=retain_ini_file)
+        retain_ini_file=retain_ini_file, do_phase_track=do_phase_track)
     
     oskar_slurms.append(oskar_slurm)
     

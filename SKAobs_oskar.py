@@ -114,10 +114,11 @@ telescope_name = options.telescope.split('/')[-1]
 num_stations = 512
 num_baselines = (num_stations - 1) * (num_stations / 2)
 
-course_band_width = 125e+3
-fine_chan_width = 1e+3
+#course_band_width = 125e+3
+#fine_chan_width = 1e+3
+course_band_width = 1e+5
+fine_chan_width = 5e+4
 num_freq_channels = int(course_band_width / fine_chan_width)
-
 
 oskar_gsm = options.oskar_gsm
 oskar_gsm_file = options.oskar_gsm_file
@@ -154,7 +155,6 @@ template_ini = open(template_ini).read().split('\n')
 ##Unflagged channel numbers
 good_chans = arange(num_freq_channels)
 #central_freq_chan = 15
-good_chans = arange(10)
 
 band_num = int(options.band_num)
 base_freq = ((band_num - 1)*course_band_width) + low_freq
@@ -262,15 +262,15 @@ else:
     #Read the pointing from the metafits and force observation towards single pointing
     
     ##All stations found through the following search - set all to point at same spot
-    stations = next(walk('%s' %telescope_dir))[1]
-    for station in stations:
-        permitted = open('%s/%s/permitted_beams.txt' %(telescope_dir,station),'w+')
-        permitted.write('%.5f %.5f' %(azimuth,altitude))
-        permitted.close
+    #stations = next(walk('%s' %telescope_dir))[1]
+    #for station in stations:
+    #    permitted = open('%s/%s/permitted_beams.txt' %(telescope_dir,station),'w+')
+    #    permitted.write('%.5f %.5f' %(azimuth,altitude))
+    #    permitted.close
 
-    permitted = open('%s/permitted_beams.txt' %(telescope_dir),'w+')
-    permitted.write('%.5f %.5f' %(azimuth,altitude))
-    permitted.close
+    #permitted = open('%s/permitted_beams.txt' %(telescope_dir),'w+')
+    #permitted.write('%.5f %.5f' %(azimuth,altitude))
+    #permitted.close
 
 
 

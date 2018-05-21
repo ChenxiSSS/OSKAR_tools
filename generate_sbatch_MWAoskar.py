@@ -9,7 +9,7 @@ OSKAR_dir = os.environ['OSKAR_TOOLS']
 def write_oskar(wd=None, metafits=None, srclist=None, oskar_uvfits_tag=None, time=None, band_num=None, 
                 data_dir=None, telescope=None, time_int=None, ini_file=None, jobs_per_GPU=None,
                 flag_dipoles=None, cluster=None,retain_vis_file=None,retain_ini_file=None,
-                do_phase_track=False):):
+                do_phase_track=False):
     '''Writes a bash script for each course band to run OSKAR'''
     
     start, finish = map(float,time.split(','))

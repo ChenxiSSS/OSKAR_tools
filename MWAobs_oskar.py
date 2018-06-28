@@ -57,7 +57,6 @@ parser.add_option('--oskar_gsm_file', default='%s/gsm/component_maps_408locked.d
 parser.add_option('--retain_vis_file',default=False,action='store_true', help='Add to not delete the oskar binary .vis files')
 parser.add_option('--retain_ini_file',default=False,action='store_true', help='Add to not delete the oskar binary .ini files')
 
-
 options, args = parser.parse_args()
 debug = options.debug
 

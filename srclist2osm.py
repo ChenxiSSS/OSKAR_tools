@@ -136,7 +136,6 @@ def create_sources(split_source):
             for i in xrange(len(freqs)-1):
                 if freqs[i]<=extrap_freq and freqs[i+1]>extrap_freq or freqs[i]<extrap_freq and freqs[i+1]>=extrap_freq:
                     SI,ext_flux = find_SI([freqs[i],freqs[i+1]],[fluxs[i],fluxs[i+1]],extrap_freq)
-        
         source.SIs.append(SI)
         source.extrap_fluxs.append(ext_flux)
         

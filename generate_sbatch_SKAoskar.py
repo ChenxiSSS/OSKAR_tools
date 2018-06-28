@@ -17,7 +17,7 @@ def write_oskar(wd=None, metafits=None, srclist=None, oskar_uvfits_tag=None, tim
     num_chans = 10    
     tot_steps = num_time_steps * num_chans
     #Time per step is 86.4
-    hours = ceil((tot_steps) / 3600.0)
+    hours = ceil((tot_steps*84.0) / 3600.0)*2
     
     #if srclist:
     #    ##Takes around 7.5 mins to do one time step with 27 channels
@@ -41,6 +41,17 @@ def write_oskar(wd=None, metafits=None, srclist=None, oskar_uvfits_tag=None, tim
         out_file.write('#SBATCH --mem=16384\n')
         out_file.write('source /data/cephfs/punim0411/software/OSKAR_tools/cluster_modles/load_spartan.sh\n')
         out_file.write('source /data/cephfs/punim0411/software/OSKAR_tools/init_OSKAR_tools.sh\n')
+
+    elif cluster == 'ozstar':
+
+        out_file.write('#!/bin/bash -l\n')
+        out_file.write('#SBATCH --partition=skylake-gpu\n')
+        out_file.write('#SBATCH --time=%02d:00:00\n' %hours)
+        out_file.write('#SBATCH --account=oz048\n')
+        out_file.write('#SBATCH --gres=gpu:1\n')
+        out_file.write('#SBATCH --mem=16384\n')
+        out_file.write('source /home/jline/software/OSKAR_tools/cluster_modles/load_ozstar.sh\n')
+        out_file.write('source /home/jline/software/OSKAR_tools/init_OSKAR_tools.sh\n')
 
     out_file.write('cd %s\n' %wd)
     
@@ -145,7 +156,7 @@ parser.add_option('-c', '--time_int',default=False, help='Enter time_int of corr
 parser.add_option('-d','--majick_tag', default=False, help='Enter uvfits tag for the point source + diffuse models')
 parser.add_option('-e','--osm', default=False, help='Alternatively just use an OSKAR .osm model')
 parser.add_option('-f','--flag_dipoles',default=False,action='store_true', help='Add to switch on dipole flagging via the metafits file. NOTE needs a metafits that has the correct data within')
-parser.add_option('-g', '--cluster', default='spartan', help='Enter the super cluster name you are on - default is spartan, options are spartan')
+parser.add_option('-g', '--cluster', default='spartan', help='Enter the super cluster name you are on - default is spartan, options are spartan or ozstar')
 
 
 parser.add_option('-i', '--ini_file', default=False, help='Enter template oskar .ini - defaults to the template .ini located in $OSKAR_TOOLS/telescopes/--telescope')

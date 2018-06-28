@@ -9,18 +9,22 @@ OSKAR_dir = os.environ['OSKAR_TOOLS']
 def write_oskar(wd=None, metafits=None, srclist=None, oskar_uvfits_tag=None, time=None, band_num=None, 
                 data_dir=None, telescope=None, time_int=None, ini_file=None, jobs_per_GPU=None,
                 flag_dipoles=None, cluster=None,retain_vis_file=None,retain_ini_file=None,
-                do_phase_track=False):
+                do_phase_track=False,full_sky_healpix=False):
     '''Writes a bash script for each course band to run OSKAR'''
     
     start, finish = map(float,time.split(','))
     num_time_steps = int((finish - start) / float(time_int))
     
-    if srclist:
-        ##Takes around 7.5 mins to do one time step with 27 channels
-        hours = ceil((num_time_steps * 7.5) / 60.0)
-    elif osm:
-        ##Quicker, run all channels with same sky model
-        hours = ceil((num_time_steps * 3.0) / 60.0)
+    if full_sky_healpix:
+        ##Takes around 7 mins to do one time step with 27 channels
+        hours = ceil((num_time_steps * 7.) / 60.0)
+    else:
+        if srclist:
+            ##Takes around 7.5 mins to do one time step with 27 channels
+            hours = ceil((num_time_steps * 7.5) / 60.0)
+        elif osm:
+            ##Quicker, run all channels with same sky model
+            hours = ceil((num_time_steps * 3.0) / 60.0)
     
     ##Set up controlling qsub script to run current batch of OSKAR processes
     file_name = 'sbatch_%s_band%02d_t%d-%d.sh' %(oskar_uvfits_tag,band_num,start,finish)
@@ -165,6 +169,7 @@ parser.add_option('-t', '--time', default=False, help='Enter start,finish times 
 parser.add_option('--retain_vis_file',default=False,action='store_true', help='Add to not delete the oskar binary .vis files')
 parser.add_option('--retain_ini_file',default=False,action='store_true', help='Add to not delete the oskar binary .ini files')
 parser.add_option('--do_phase_track',default=False,action='store_true', help='Add to leave on the phase tracking done by OSKAR')
+parser.add_option('--full_sky_healpix',default=False,action='store_true', help='Makes a longer estimate for completion time if using an osm generated from a full sky healpix')
 
 
 
@@ -207,6 +212,7 @@ flag_dipoles = options.flag_dipoles
 retain_vis_file = options.retain_vis_file
 retain_ini_file = options.retain_ini_file
 do_phase_track = options.do_phase_track
+full_sky_healpix = options.full_sky_healpix
 
 if srclist:
     pass
@@ -243,7 +249,7 @@ majick_slurms = []
 for band_num in band_nums:
     oskar_slurm = write_oskar(wd=wd, metafits=metafits, srclist=srclist, oskar_uvfits_tag=oskar_uvfits_tag, time=time, band_num=band_num, data_dir=output_dir,
         telescope=telescope, time_int=time_int, ini_file=ini_file, flag_dipoles=flag_dipoles, cluster=options.cluster, retain_vis_file=retain_vis_file,
-        retain_ini_file=retain_ini_file, do_phase_track=do_phase_track)
+        retain_ini_file=retain_ini_file, do_phase_track=do_phase_track, full_sky_healpix=full_sky_healpix)
     
     oskar_slurms.append(oskar_slurm)
     

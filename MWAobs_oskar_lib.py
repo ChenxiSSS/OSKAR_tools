@@ -354,7 +354,7 @@ def read_oskar_binary(filename=None,num_time_steps=None,num_baselines=None,num_c
             ##*4 because floats are 4 bytes long
             visi_inds = arange(0,8*4*num_vis,4)
         elif d_double:
-            ##*4 because floats are 8 bytes long
+            ##*8 because doubles are 8 bytes long
             visi_inds = arange(0,8*8*num_vis,8)
         
         for ind in xrange(8*num_vis):
@@ -364,14 +364,17 @@ def read_oskar_binary(filename=None,num_time_steps=None,num_baselines=None,num_c
                 all_nums[ind] = unpack('<f',block[visi_inds[ind]:visi_inds[ind]+8])[0]
         
         ###Split the data up by polarisation
-        xx_res[filled_visis:filled_visis+num_vis] = all_nums[arange(0,8*num_vis,8)]
-        xx_ims[filled_visis:filled_visis+num_vis] = all_nums[arange(1,8*num_vis,8)]
-        xy_res[filled_visis:filled_visis+num_vis] = all_nums[arange(2,8*num_vis,8)]
-        xy_ims[filled_visis:filled_visis+num_vis] = all_nums[arange(3,8*num_vis,8)]
-        yx_res[filled_visis:filled_visis+num_vis] = all_nums[arange(4,8*num_vis,8)]
-        yx_ims[filled_visis:filled_visis+num_vis] = all_nums[arange(5,8*num_vis,8)]
-        yy_res[filled_visis:filled_visis+num_vis] = all_nums[arange(6,8*num_vis,8)]
-        yy_ims[filled_visis:filled_visis+num_vis] = all_nums[arange(7,8*num_vis,8)]
+        
+        scale = 1.0
+        
+        xx_res[filled_visis:filled_visis+num_vis] = all_nums[arange(0,8*num_vis,8)]*scale
+        xx_ims[filled_visis:filled_visis+num_vis] = all_nums[arange(1,8*num_vis,8)]*scale
+        xy_res[filled_visis:filled_visis+num_vis] = all_nums[arange(2,8*num_vis,8)]*scale
+        xy_ims[filled_visis:filled_visis+num_vis] = all_nums[arange(3,8*num_vis,8)]*scale
+        yx_res[filled_visis:filled_visis+num_vis] = all_nums[arange(4,8*num_vis,8)]*scale
+        yx_ims[filled_visis:filled_visis+num_vis] = all_nums[arange(5,8*num_vis,8)]*scale
+        yy_res[filled_visis:filled_visis+num_vis] = all_nums[arange(6,8*num_vis,8)]*scale
+        yy_ims[filled_visis:filled_visis+num_vis] = all_nums[arange(7,8*num_vis,8)]*scale
         
         filled_visis += num_vis
             
@@ -504,7 +507,7 @@ def make_ini(prefix_name=None,ra=None,dec=None,freq=None,start_time=None,sky_osm
         elif "phase_centre_ra_deg" in line:
             line = "phase_centre_ra_deg=%.10f" %ra
         elif "phase_centre_dec_deg" in line:
-            line = "phase_centre_dec_deg=%.10f" %MWA_LAT
+            line = "phase_centre_dec_deg=%.10f" %dec
         elif "start_time_utc" in line:
             line = "start_time_utc=%s" %start_time
         elif line.split('=')[0]=="length":
@@ -681,10 +684,11 @@ def create_flagged_telescope(metafits=None,antenna_coord_file=None,azimuth=None,
         out_file.close()
         
 def add_data_to_uvfits(v_container=None,time_ind=None,num_baselines=None,template_baselines=None,
-    chan=None,num_oskar_channels=False,oskar_ind=False,uu=None,vv=None,ww=None,float_jd_array=None,
+    chan=None,num_oskar_channels='False',oskar_ind=False,uu=None,vv=None,ww=None,float_jd_array=None,
     baselines_array=None,date_array=None,undo_phase_track=True,xx_res=None,xx_ims=None,
     xy_res=None,xy_ims=None,yx_res=None,yx_ims=None,yy_res=None,yy_ims=None,x_lengths=None,y_lengths=None,
-    z_lengths=None,uus=None,vvs=None,wws=None,tstep=None,freq=None,ch_width=None,central_freq_chan=None):
+    z_lengths=None,uus=None,vvs=None,wws=None,tstep=None,freq=None,ch_width=None,central_freq_chan=None,
+    chips_settings=False):
     
     time_ind_lower = time_ind*num_baselines
     
@@ -694,13 +698,15 @@ def add_data_to_uvfits(v_container=None,time_ind=None,num_baselines=None,templat
     chan_ww = ww[time_ind_lower:time_ind_lower+num_baselines] / (VELC / freq)
     
     ##Depending on if OSKAR was run with chans separately or together, select channels appropriately
-    if oskar_ind == False:
+    if oskar_ind == 'False':
         osk_low = time_ind_lower
         osk_high = time_ind_lower+num_baselines
+        
     else:
-        osk_low = (num_oskar_channels*time_ind_lower) + oskar_ind * num_baselines
-        osk_high = (num_oskar_channels*time_ind_lower) + (oskar_ind + 1) * num_baselines
-    
+        
+        osk_low = (num_oskar_channels*time_ind*num_baselines) + (oskar_ind*num_baselines)
+        osk_high = osk_low + num_baselines
+        
     ##Select the correct visibilities from the binary data
     chan_xx_res = xx_res[osk_low:osk_high]
     chan_xx_ims = xx_ims[osk_low:osk_high]
@@ -710,6 +716,8 @@ def add_data_to_uvfits(v_container=None,time_ind=None,num_baselines=None,templat
     chan_yx_ims = yx_ims[osk_low:osk_high]
     chan_yy_res = yy_res[osk_low:osk_high]
     chan_yy_ims = yy_ims[osk_low:osk_high]
+    
+    
     
     ##Make complex numpy arrays
     comp_xx = make_complex(chan_xx_res,chan_xx_ims)
@@ -734,24 +742,34 @@ def add_data_to_uvfits(v_container=None,time_ind=None,num_baselines=None,templat
     ##Use the centre of the fine channel
     freq_cent = freq + (ch_width / 2.0)
     
+    ##If doing a mock CHIPS obs, the central channel is an average
+    ##of a full and an empty channel, so need to set weights to 0.5
+    if chips_settings:
+        if chan == central_freq_chan:
+            scale = 0.5
+        else:
+            scale = 1.0
+    else:
+        scale = 1.0
+    
     ##Populate the v_container at the correct spots
-    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,0,0] = real(final_xx)
-    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,0,1] = imag(final_xx)
+    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,0,0] = real(final_xx)*scale
+    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,0,1] = imag(final_xx)*scale
     
-    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,1,0] = real(final_yy)
-    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,1,1] = imag(final_yy)
+    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,1,0] = real(final_yy)*scale
+    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,1,1] = imag(final_yy)*scale
     
-    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,2,0] = real(final_xy)
-    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,2,1] = imag(final_xy)
+    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,2,0] = real(final_xy)*scale
+    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,2,1] = imag(final_xy)*scale
     
-    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,3,0] = real(final_yx)
-    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,3,1] = imag(final_yx)
+    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,3,0] = real(final_yx)*scale
+    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,3,1] = imag(final_yx)*scale
     
     ##Set the weights of everything to ones
-    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,0,2] = ones(len(chan_uu))
-    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,1,2] = ones(len(chan_uu))
-    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,2,2] = ones(len(chan_uu))
-    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,3,2] = ones(len(chan_uu))
+    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,0,2] = ones(len(chan_uu))*scale
+    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,1,2] = ones(len(chan_uu))*scale
+    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,2,2] = ones(len(chan_uu))*scale
+    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,3,2] = ones(len(chan_uu))*scale
     
     ##Only set the u,v,w to the central frequency channel
     ##Header of uvfits has to match central_freq_chan + 1 (uvfits 1 ordered, python zero ordered)

@@ -32,24 +32,30 @@ VELC = 299792458.0
 parser = OptionParser()
 
 
-parser.add_option('-a','--telescope', default='%s/telescopes/MWA_phase1' %OSKAR_dir, help='Enter telescope used for simulation. Default = $OSKAR_TOOLS/telescopes/MWA_phase1')
-parser.add_option('-b','--band_num', help='Enter band number to simulate')
-parser.add_option('-c','--osm', default=False, help='Location of OSKAR osm sky model to use')
-parser.add_option('-d','--debug',default=False,action='store_true', help='Enable to debug with print statements')
-parser.add_option('-e','--antenna_coord_file',default='%s/telescopes/MWA_phase1/MWATools-antenna_locations.txt' %OSKAR_dir,
+parser.add_option('--telescope', default='%s/telescopes/MWA_phase1' %OSKAR_dir, help='Enter telescope used for simulation. Default = $OSKAR_TOOLS/telescopes/MWA_phase1')
+parser.add_option('--band_num', help='Enter band number to simulate')
+parser.add_option('--osm', default=False, help='Location of OSKAR osm sky model to use')
+parser.add_option('--debug',default=False,action='store_true', help='Enable to debug with print statements')
+parser.add_option('--antenna_coord_file',default='%s/telescopes/MWA_phase1/MWATools-antenna_locations.txt' %OSKAR_dir,
                   help='If creating a telescope model with dipole flags, use this as the array layout. Defaults to MWA_phase1 ($OSKAR_TOOLS/telescopes/MWA_phase1/MWATools-antenna_locations.txt)')
-parser.add_option('-f','--healpix', default=False, help='Enter healpix tag to use base images NOT CURRENTLY USED')
-parser.add_option('-g','--fit_osm', default=False, help='Location of sky parameters to create osm from')
-parser.add_option('-i', '--ini_file', default=False, help='Enter template oskar .ini - defaults to the template .ini located in $OSKAR_TOOLS/telescopes/--telescope')
-parser.add_option('-j','--flag_dipoles',default=False,action='store_true', help='Add to switch on dipole flagging via the metafits file. NOTE needs a metafits that has the correct data within')
-parser.add_option('-k','--do_phase_track',default=False,action='store_true', help='Add to leave on the phase tracking done by OSKAR')
+parser.add_option('--healpix', default=False, help='Enter healpix tag to use base images NOT CURRENTLY USED')
+parser.add_option('--fit_osm', default=False, help='Location of sky parameters to create osm from')
+parser.add_option( '--ini_file', default=False, help='Enter template oskar .ini - defaults to the template .ini located in $OSKAR_TOOLS/telescopes/--telescope')
+parser.add_option('--flag_dipoles',default=False,action='store_true', help='Add to switch on dipole flagging via the metafits file. NOTE needs a metafits that has the correct data within')
+parser.add_option('--do_phase_track',default=False,
+    help='Add to leave the default phase tracking done by OSKAR (phase track the RA,DEC in the metafits). OPTIONAL - can also set the phase centre explicitly using --phase_centre')
+parser.add_option('--phase_centre',default=False,
+    help='Set phase centre and leave in phase tracking in final uvfits. Usage: --phase_centre=ra,dec with ra,dec in deg')
 
-parser.add_option('-o','--data_dir', help='Where to output the finished uvfits - default is ./data',default=False)
-parser.add_option('-m','--metafits', help='Enter name of metafits file to base obs on')
-parser.add_option('-n','--output_name', help='Enter prefix name for outputs')
-parser.add_option('-s','--srclist', default=False, help='Enter location and name of the RTS srclist to use as a sky model')
-parser.add_option('-t','--time', help='Enter start,end of sim in seconds from the beginning of the observation (as set by metafits)')
-parser.add_option('-x','--time_int', default=False, help='Enable to force a different time cadence from that in the metafits - enter the time in seconds')
+parser.add_option('--data_dir', help='Where to output the finished uvfits - default is ./data',default=False)
+parser.add_option('--metafits', help='Enter name of metafits file to base obs on')
+parser.add_option('--output_name', help='Enter prefix name for outputs')
+parser.add_option('--srclist', default=False, help='Enter location and name of the RTS srclist to use as a sky model')
+parser.add_option('--time', help='Enter start,end of sim in seconds from the beginning of the observation (as set by metafits)')
+parser.add_option('--time_int', default=False, help='Enable to force a different time cadence from that in the metafits - enter the time in seconds')
+parser.add_option('--freq_int', default=False, help='Enable to force a different fine channel width from that in the metafits - enter the frequency in Hz')
+parser.add_option('--chips_settings', default=False, action='store_true',
+    help='Swtiches on a default CHIPS resolution and uvfits weightings - 8s, 80kHz integration with the normal 5 40kHz channels missing. OVERRIDES other time/freq int settings')
 
 parser.add_option('--oskar_gsm', default=False, action='store_true',help='Add to include the gsm as calculated by OSKAR')
 parser.add_option('--oskar_gsm_SI', default=-2.5, help='The spectral index to give the gsm made by OSKAR')
@@ -86,13 +92,22 @@ year,month,day = date.split('-')
 oskar_date = "%s-%s-%s %s" %(day,month,year,time)
 
 time_int = float(f[0].header['INTTIME'])
-
 if options.time_int: time_int = float(options.time_int)
 
 ch_width = float(f[0].header['FINECHAN'])*1e+3
 freqcent = float(f[0].header['FREQCENT'])*1e+6
 b_width = float(f[0].header['BANDWDTH'])*1e+6
-low_freq = freqcent - (b_width/2) - (ch_width/2)
+base_low_freq = freqcent - (b_width/2) - (ch_width/2)
+low_freq = base_low_freq
+
+if options.freq_int:
+    ch_width = float(options.freq_int)
+    low_freq = base_low_freq + (ch_width / 2.0)
+    
+if options.chips_settings:
+    ch_width = 80e+3
+    time_int = 8.0
+    low_freq = base_low_freq + (ch_width / 2.0)
 
 ##ephem Observer class, use this to compute LST from the date of the obs 
 MRO = Observer()
@@ -113,7 +128,7 @@ template_uvfits = fits.open("%s/template_%s.uvfits" %(telescope_dir,telescope_na
 template_data = template_uvfits[0].data
 template_baselines = template_uvfits[0].data['BASELINE'].copy()
 num_baselines = len(template_data)
-num_freq_channels = 32
+num_freq_channels = int(1.28e+6 / ch_width)
 
 oskar_gsm = options.oskar_gsm
 oskar_gsm_file = options.oskar_gsm_file
@@ -147,9 +162,19 @@ else:
     template_ini = "%s/template_%s.ini" %(telescope_dir,telescope_name)
 template_ini = open(template_ini).read().split('\n')
     
-##Unflagged channel numbers
-good_chans = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29]
-central_freq_chan = 15
+##Unflagged channel numbers for 40kHz observation
+if num_freq_channels == 32:
+    good_chans = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29]
+    central_freq_chan = 15
+##Ignores first and last channels for CHIPS settings
+elif options.chips_settings:
+    good_chans = range(1,15)
+    central_freq_chan = 8
+##Anything else just simulate them all
+else:
+    good_chans = range(0,num_freq_channels)
+    central_freq_chan = num_freq_channels / 2
+    
 #good_chans = xrange(32)
 #good_chans = [2,3]
 #central_freq_chan = 2
@@ -186,6 +211,9 @@ if options.do_phase_track:
 else:
     undo_phase_track = True
 
+if options.phase_centre:
+    initial_ra_point,dec_point = map(float,options.phase_centre.split(','))
+    undo_phase_track = False
 
 ##Sidereal seconds per solar seconds - ie if 1s passes on
 ##the clock, sky has moved by 1.00274 secs of angle
@@ -287,8 +315,6 @@ def the_main_loop(tsteps=None):
         num_channels = len(good_chans)
         oskar_channels = range(good_chans[0],good_chans[-1]+1)
         
-        #print oskar_channels
-        
         oskar_inds = [oskar_channels.index(good_chan) for good_chan in good_chans]
         num_oskar_channels = len(oskar_channels)
         #print "NUM CHANNELS",num_channels
@@ -355,7 +381,7 @@ def the_main_loop(tsteps=None):
                     baselines_array=baselines_array,date_array=date_array,undo_phase_track=undo_phase_track,xx_res=xx_res,xx_ims=xx_ims,
                     xy_res=xy_res,xy_ims=xy_ims,yx_res=yx_res,yx_ims=yx_ims,yy_res=yy_res,yy_ims=yy_ims,
                     x_lengths=x_lengths,y_lengths=y_lengths,z_lengths=z_lengths,uus=uus,vvs=vvs,wws=wws,
-                    tstep=tstep,freq=freq,ch_width=ch_width,central_freq_chan=central_freq_chan)
+                    tstep=tstep,freq=freq,ch_width=ch_width,central_freq_chan=central_freq_chan,chips_settings=options.chips_settings)
                 
             
     ##If we want other sky model behaviours, i.e. curvature to the spectrum,
@@ -421,9 +447,12 @@ def the_main_loop(tsteps=None):
                     chan=chan,uu=uu,vv=vv,ww=ww,float_jd_array=float_jd_array,baselines_array=baselines_array,date_array=date_array,
                     undo_phase_track=undo_phase_track,xx_res=xx_res,xx_ims=xx_ims,xy_res=xy_res,xy_ims=xy_ims,yx_res=yx_res,
                     yx_ims=yx_ims,yy_res=yy_res,yy_ims=yy_ims,x_lengths=x_lengths,y_lengths=y_lengths,z_lengths=z_lengths,
-                    uus=uus,vvs=vvs,wws=wws,tstep=tstep,freq=freq,ch_width=ch_width,central_freq_chan=central_freq_chan)
-                
-    output_uvfits_name = "%s/%s_t%02d_f%.3f_band%02d.uvfits" %(data_dir,outname,time_int,ch_width/1e+6,band_num)
+                    uus=uus,vvs=vvs,wws=wws,tstep=tstep,freq=freq,ch_width=ch_width,central_freq_chan=central_freq_chan,chips_settings=options.chips_settings)
+    
+    if options.chips_settings:
+        output_uvfits_name = "%s/%s_chips-t%02d_f%.3f_band%02d.uvfits" %(data_dir,outname,time_int,ch_width/1e+6,band_num)
+    else:
+        output_uvfits_name = "%s/%s_t%02d_f%.3f_band%02d.uvfits" %(data_dir,outname,time_int,ch_width/1e+6,band_num)
     print "Now creating uvfits file %s" %output_uvfits_name
     create_uvfits(v_container=v_container,freq_cent=central_freq_chan_value,ra_point=initial_ra_point,
                 output_uvfits_name=output_uvfits_name,uu=uus,vv=vvs,ww=wws,baselines_array=baselines_array,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from numpy import log,pi,arcsin,sin,cos,isnan,nan,sqrt
+from numpy import log,pi,arcsin,sin,cos,isnan,nan,sqrt,array,where
 from optparse import OptionParser
 from sys import exit
 
@@ -121,6 +121,15 @@ def create_sources(split_source):
     ##Mimic the way that the RTS would try to extrapolate the flux of the source
     ##to the observational frequency
     for freqs,fluxs in zip(source.freqs,source.fluxs):
+        
+        if len(fluxs) != len(freqs):
+            print 'NOOOOOOOO'
+            print fluxs
+            print freqs
+        
+        fluxs = array(fluxs)[where(array(fluxs) > 0.0)]
+        freqs = array(freqs)[where(array(fluxs) > 0.0)]
+        
         ##If one flux, assume -0.7 like the RTS
         if len(freqs)==1:
             SI = -0.7
@@ -140,6 +149,8 @@ def create_sources(split_source):
         source.extrap_fluxs.append(ext_flux)
         
         if isnan(ext_flux):
+            print(freqs)
+            print(fluxs)
             print "Extrapolated flux is NAN, you gonna have problems",exit(0)
         
     #sources.append(source)

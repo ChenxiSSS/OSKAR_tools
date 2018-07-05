@@ -107,7 +107,7 @@ if options.freq_int:
 if options.chips_settings:
     ch_width = 80e+3
     time_int = 8.0
-    low_freq = base_low_freq + (ch_width / 2.0)
+    low_freq = base_low_freq - (ch_width / 2.0)
 
 ##ephem Observer class, use this to compute LST from the date of the obs 
 MRO = Observer()
@@ -371,9 +371,10 @@ def the_main_loop(tsteps=None):
             ##per time step
             for oskar_ind,chan in zip(oskar_inds,good_chans):
                 freq = base_freq + (chan*ch_width)
+                freq_cent = freq + (ch_width / 2.0)
                 
                 if chan == central_freq_chan:
-                    freq_cent = freq + (ch_width / 2.0)
+                    
                     central_freq_chan_value = freq_cent
                 
                 add_data_to_uvfits(v_container=v_container,time_ind=time_ind,num_baselines=num_baselines,template_baselines=template_baselines,
@@ -454,7 +455,7 @@ def the_main_loop(tsteps=None):
     else:
         output_uvfits_name = "%s/%s_t%02d_f%.3f_band%02d.uvfits" %(data_dir,outname,time_int,ch_width/1e+6,band_num)
     print "Now creating uvfits file %s" %output_uvfits_name
-    create_uvfits(v_container=v_container,freq_cent=central_freq_chan_value,ra_point=initial_ra_point,
+    create_uvfits(v_container=v_container,freq_cent=central_freq_chan_value,ra_point=initial_ra_point,dec_point=dec_point,
                 output_uvfits_name=output_uvfits_name,uu=uus,vv=vvs,ww=wws,baselines_array=baselines_array,
                 date_array=date_array,date=oskar_date,central_freq_chan=central_freq_chan,ch_width=ch_width,
                 template_uvfits=template_uvfits,int_jd=int_jd)

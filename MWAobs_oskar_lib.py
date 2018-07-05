@@ -410,7 +410,7 @@ def make_complex(re=None,im=None):
     
     return comp
 
-def create_uvfits(v_container=None,freq_cent=None, ra_point=None, dec_point=MWA_LAT, 
+def create_uvfits(v_container=None,freq_cent=None, ra_point=None, dec_point=None, 
                   output_uvfits_name=None,uu=None,vv=None,ww=None,
                   baselines_array=None,date_array=None,date=None,
                   central_freq_chan=None,ch_width=None,template_uvfits=None,

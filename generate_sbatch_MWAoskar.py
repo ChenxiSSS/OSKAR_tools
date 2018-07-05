@@ -88,8 +88,7 @@ def write_oskar(wd=None, metafits=None, srclist=None, oskar_uvfits_tag=None, tim
     if options.chips_settings:
         oskar_options += ' --chips_settings'
     
-    out_file.write('time %s/MWAobs_oskar.py %s &\n' %(OSKAR_dir, oskar_options))
-        
+    out_file.write('time %s/MWAobs_oskar.py %s\n' %(OSKAR_dir, oskar_options))
     out_file.write('rm %s/%s' %(wd,file_name))
     out_file.close()
     

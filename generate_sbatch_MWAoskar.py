@@ -203,7 +203,7 @@ do_phase_track = options.do_phase_track
 full_sky_healpix = options.full_sky_healpix
 freq_int = options.freq_int
 chips_settings = options.chips_settings
-phase_centre = options.chips_settings
+phase_centre = options.phase_centre
 
 if srclist:
     pass

@@ -2,11 +2,12 @@
 from subprocess import call
 from sys import exit
 from optparse import OptionParser
-from numpy import zeros, pi, sin, cos, real, imag, loadtxt, array, floor, arange, ones, where, savetxt, mod
+from numpy import zeros, pi, sin, cos, real, imag, loadtxt, array, floor, arange, ones, where, savetxt, mod, load
 from numpy import exp as n_exp
 from ephem import Observer
 from cmath import exp
 from sys import path as sys_path
+from scipy.interpolate import interp1d
 try:
     from jdcal import gcal2jd
 except ImportError:
@@ -298,6 +299,23 @@ else:
     permitted.close
 
 
+##The OSKAR analytic beam can only be normalised to
+##the phase centre - this is bad for no phase tracking,
+##as the beam normalisation changes with time for a stationary
+##beam. To solve for this, I've made images of the beam created
+##from 50 - 300MHz at 0.5MHz intervals, and measured the max gain
+##From this we can fit a spline function, and empirically get a gain
+##correction, so all beams are normalised to 1 at zenith
+
+beam_info = load('%s/OSKAR_beam_gains.npz' %(telescope_dir))['beam_info']
+
+freqs = beam_info[:,0]
+maxs = beam_info[:,1]
+
+##This is now a function of freq - pass it to add_data_to_uvfits to
+##do the correction when adding data to uvfits
+beam_gain = interp1d(freqs,array(maxs),kind='cubic')
+
 
 ##Reset the telescope_dir to copied location
 telescope_dir = '%s/telescope_%s_band%02d' %(tmp_dir,outname,band_num)
@@ -382,7 +400,8 @@ def the_main_loop(tsteps=None):
                     baselines_array=baselines_array,date_array=date_array,undo_phase_track=undo_phase_track,xx_res=xx_res,xx_ims=xx_ims,
                     xy_res=xy_res,xy_ims=xy_ims,yx_res=yx_res,yx_ims=yx_ims,yy_res=yy_res,yy_ims=yy_ims,
                     x_lengths=x_lengths,y_lengths=y_lengths,z_lengths=z_lengths,uus=uus,vvs=vvs,wws=wws,
-                    tstep=tstep,freq=freq,ch_width=ch_width,central_freq_chan=central_freq_chan,chips_settings=options.chips_settings)
+                    tstep=tstep,freq=freq,ch_width=ch_width,central_freq_chan=central_freq_chan,chips_settings=options.chips_settings,
+                    gain_correction=beam_gain)
                 
             
     ##If we want other sky model behaviours, i.e. curvature to the spectrum,
@@ -448,7 +467,8 @@ def the_main_loop(tsteps=None):
                     chan=chan,uu=uu,vv=vv,ww=ww,float_jd_array=float_jd_array,baselines_array=baselines_array,date_array=date_array,
                     undo_phase_track=undo_phase_track,xx_res=xx_res,xx_ims=xx_ims,xy_res=xy_res,xy_ims=xy_ims,yx_res=yx_res,
                     yx_ims=yx_ims,yy_res=yy_res,yy_ims=yy_ims,x_lengths=x_lengths,y_lengths=y_lengths,z_lengths=z_lengths,
-                    uus=uus,vvs=vvs,wws=wws,tstep=tstep,freq=freq,ch_width=ch_width,central_freq_chan=central_freq_chan,chips_settings=options.chips_settings)
+                    uus=uus,vvs=vvs,wws=wws,tstep=tstep,freq=freq,ch_width=ch_width,central_freq_chan=central_freq_chan,
+                    chips_settings=options.chips_settings,gain_correction=beam_gain)
     
     if options.chips_settings:
         output_uvfits_name = "%s/%s_chips-t%02d_f%.3f_band%02d.uvfits" %(data_dir,outname,time_int,ch_width/1e+6,band_num)

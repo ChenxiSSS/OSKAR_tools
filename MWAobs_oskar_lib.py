@@ -688,7 +688,7 @@ def add_data_to_uvfits(v_container=None,time_ind=None,num_baselines=None,templat
     baselines_array=None,date_array=None,undo_phase_track=True,xx_res=None,xx_ims=None,
     xy_res=None,xy_ims=None,yx_res=None,yx_ims=None,yy_res=None,yy_ims=None,x_lengths=None,y_lengths=None,
     z_lengths=None,uus=None,vvs=None,wws=None,tstep=None,freq=None,ch_width=None,central_freq_chan=None,
-    chips_settings=False):
+    chips_settings=False,gain_correction=False):
     
     time_ind_lower = time_ind*num_baselines
     
@@ -742,15 +742,21 @@ def add_data_to_uvfits(v_container=None,time_ind=None,num_baselines=None,templat
     ##Use the centre of the fine channel
     freq_cent = freq + (ch_width / 2.0)
     
+
+    ##OSKAR beam needs to have an overall gain correction, depending
+    ##on frequency.
+    
+    correction = 1 / gain_correction(freq_cent)
+
     ##If doing a mock CHIPS obs, the central channel is an average
     ##of a full and an empty channel, so need to set weights to 0.5
     if chips_settings:
         if chan == central_freq_chan:
-            scale = 0.5
+            scale = 0.5 * correction
         else:
-            scale = 1.0
+            scale = correction
     else:
-        scale = 1.0
+        scale = correction
     
     ##Populate the v_container at the correct spots
     v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,0,0] = real(final_xx)*scale

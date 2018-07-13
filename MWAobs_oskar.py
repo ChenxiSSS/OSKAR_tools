@@ -57,6 +57,8 @@ parser.add_option('--time_int', default=False, help='Enable to force a different
 parser.add_option('--freq_int', default=False, help='Enable to force a different fine channel width from that in the metafits - enter the frequency in Hz')
 parser.add_option('--chips_settings', default=False, action='store_true',
     help='Swtiches on a default CHIPS resolution and uvfits weightings - 8s, 80kHz integration with the normal 5 40kHz channels missing. OVERRIDES other time/freq int settings')
+parser.add_option('--full_chips', default=False, action='store_true',
+    help='Instead of missing freq channels, do a complete simulation')
 
 parser.add_option('--oskar_gsm', default=False, action='store_true',help='Add to include the gsm as calculated by OSKAR')
 parser.add_option('--oskar_gsm_SI', default=-2.5, help='The spectral index to give the gsm made by OSKAR')
@@ -169,7 +171,10 @@ if num_freq_channels == 32:
     central_freq_chan = 15
 ##Ignores first and last channels for CHIPS settings
 elif options.chips_settings:
-    good_chans = range(1,15)
+    if options.full_chips:
+        good_chans = range(0,16)
+    else:
+        good_chans = range(1,15)
     central_freq_chan = 8
 ##Anything else just simulate them all
 else:
@@ -401,7 +406,7 @@ def the_main_loop(tsteps=None):
                     xy_res=xy_res,xy_ims=xy_ims,yx_res=yx_res,yx_ims=yx_ims,yy_res=yy_res,yy_ims=yy_ims,
                     x_lengths=x_lengths,y_lengths=y_lengths,z_lengths=z_lengths,uus=uus,vvs=vvs,wws=wws,
                     tstep=tstep,freq=freq,ch_width=ch_width,central_freq_chan=central_freq_chan,chips_settings=options.chips_settings,
-                    gain_correction=beam_gain)
+                    full_chips=options.full_chips,gain_correction=beam_gain)
                 
             
     ##If we want other sky model behaviours, i.e. curvature to the spectrum,
@@ -468,7 +473,7 @@ def the_main_loop(tsteps=None):
                     undo_phase_track=undo_phase_track,xx_res=xx_res,xx_ims=xx_ims,xy_res=xy_res,xy_ims=xy_ims,yx_res=yx_res,
                     yx_ims=yx_ims,yy_res=yy_res,yy_ims=yy_ims,x_lengths=x_lengths,y_lengths=y_lengths,z_lengths=z_lengths,
                     uus=uus,vvs=vvs,wws=wws,tstep=tstep,freq=freq,ch_width=ch_width,central_freq_chan=central_freq_chan,
-                    chips_settings=options.chips_settings,gain_correction=beam_gain)
+                    chips_settings=options.chips_settings,full_chips=options.full_chips,gain_correction=beam_gain)
     
     if options.chips_settings:
         output_uvfits_name = "%s/%s_chips-t%02d_f%.3f_band%02d.uvfits" %(data_dir,outname,time_int,ch_width/1e+6,band_num)

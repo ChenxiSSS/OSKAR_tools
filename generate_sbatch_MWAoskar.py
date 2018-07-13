@@ -10,7 +10,7 @@ def write_oskar(wd=None, metafits=None, srclist=None, oskar_uvfits_tag=None, tim
                 data_dir=None, telescope=None, time_int=None, ini_file=None, jobs_per_GPU=None,
                 flag_dipoles=None, cluster=None,retain_vis_file=None,retain_ini_file=None,
                 do_phase_track=False,full_sky_healpix=False,freq_int=False,
-                chips_settings=False,phase_centre=False):
+                chips_settings=False,phase_centre=False,full_chips=False):
     '''Writes a bash script for each course band to run OSKAR'''
     
     start, finish = map(float,time.split(','))
@@ -87,6 +87,9 @@ def write_oskar(wd=None, metafits=None, srclist=None, oskar_uvfits_tag=None, tim
         oskar_options += ' --phase_centre=%s' %phase_centre
     if options.chips_settings:
         oskar_options += ' --chips_settings'
+    if options.full_chips:
+        oskar_options += ' --full_chips'
+
     
     out_file.write('time %s/MWAobs_oskar.py %s\n' %(OSKAR_dir, oskar_options))
     out_file.write('rm %s/%s' %(wd,file_name))
@@ -155,6 +158,7 @@ parser.add_option('--full_sky_healpix',default=False,action='store_true', help='
 parser.add_option('--freq_int', default=False, help='Enable to force a different fine channel width from that in the metafits - enter the frequency in Hz')
 parser.add_option('--chips_settings', default=False, action='store_true',
     help='Swtiches on a default CHIPS resolution and uvfits weightings - 8s, 80kHz integration with the normal 5 40kHz channels missing. OVERRIDES other time/freq int settings')
+parser.add_option('--full_chips', default=False, action='store_true',help='Instead of missing freq channels, simulate full band coverage in CHIPS mode')
 parser.add_option('--phase_centre',default=False,
     help='Set phase centre and leave in phase tracking in final uvfits. Usage: --phase_centre=ra,dec with ra,dec in deg')
 

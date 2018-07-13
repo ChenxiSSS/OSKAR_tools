@@ -688,7 +688,7 @@ def add_data_to_uvfits(v_container=None,time_ind=None,num_baselines=None,templat
     baselines_array=None,date_array=None,undo_phase_track=True,xx_res=None,xx_ims=None,
     xy_res=None,xy_ims=None,yx_res=None,yx_ims=None,yy_res=None,yy_ims=None,x_lengths=None,y_lengths=None,
     z_lengths=None,uus=None,vvs=None,wws=None,tstep=None,freq=None,ch_width=None,central_freq_chan=None,
-    chips_settings=False,gain_correction=False):
+    chips_settings=False,gain_correction=False,full_chips=False):
     
     time_ind_lower = time_ind*num_baselines
     
@@ -751,12 +751,19 @@ def add_data_to_uvfits(v_container=None,time_ind=None,num_baselines=None,templat
     ##If doing a mock CHIPS obs, the central channel is an average
     ##of a full and an empty channel, so need to set weights to 0.5
     if chips_settings:
-        if chan == central_freq_chan:
-            scale = 0.5 * correction
-        else:
+        if full_chips:
             scale = correction
+            weights = 1.0
+        else:
+            if chan == central_freq_chan:
+                scale = 0.5 * correction
+                weights = 0.5
+            else:
+                scale = correction
+                weights = 1.0
     else:
         scale = correction
+        weights = 1.0
     
     ##Populate the v_container at the correct spots
     v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,0,0] = real(final_xx)*scale
@@ -772,10 +779,10 @@ def add_data_to_uvfits(v_container=None,time_ind=None,num_baselines=None,templat
     v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,3,1] = imag(final_yx)*scale
     
     ##Set the weights of everything to ones
-    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,0,2] = ones(len(chan_uu))*scale
-    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,1,2] = ones(len(chan_uu))*scale
-    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,2,2] = ones(len(chan_uu))*scale
-    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,3,2] = ones(len(chan_uu))*scale
+    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,0,2] = ones(len(chan_uu))*weights
+    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,1,2] = ones(len(chan_uu))*weights
+    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,2,2] = ones(len(chan_uu))*weights
+    v_container[time_ind_lower:time_ind_lower+num_baselines,0,0,0,chan,3,2] = ones(len(chan_uu))*weights
     
     ##Only set the u,v,w to the central frequency channel
     ##Header of uvfits has to match central_freq_chan + 1 (uvfits 1 ordered, python zero ordered)

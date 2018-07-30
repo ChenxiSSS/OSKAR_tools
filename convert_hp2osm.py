@@ -86,6 +86,7 @@ parser.add_argument('--use_minimum_flux_as_floor',default=False,action='store_tr
                     help='Add to use the minimum pixel value for taper instead of confusion noise (i.e. if converting a 21cmFAST healpix into an osm)')
 parser.add_argument('--max_baseline',default=3e+3, help='Max baseline length with which to calculate confusion noise (m) for tapering')
 parser.add_argument('--plot',default=False,action='store_true',help='Make a simple plot of ra/dec to see sky coverage')
+parser.add_argument('--auto_zero',default=False,action='store_true',help='Automatically makes the average flux zero - this is important to avoid sharp edges in flux when tapering (especially with MWA sims)')
 
 args = parser.parse_args()
 
@@ -139,15 +140,15 @@ if args.taper_coords:
     taper = where(new_flux != 0)
         
     
-    fig = plt.figure(figsize=(10,10))
-    ax = fig.add_subplot(111)
+    #fig = plt.figure(figsize=(10,10))
+    #ax = fig.add_subplot(111)
     
-    ras = linspace(45,75,1000)
-    decs = ones(1000)*-26.7
+    #ras = linspace(45,75,1000)
+    #decs = ones(1000)*-26.7
     
-    ax.plot(ras,gauss_roll_taper(ra_cent=ra0,dec_cent=dec0,ras=ras,decs=decs,high_cut=high_cut,low_cut=low_cut))
+    #ax.plot(ras,gauss_roll_taper(ra_cent=ra0,dec_cent=dec0,ras=ras,decs=decs,high_cut=high_cut,low_cut=low_cut))
     
-    fig.savefig('taper_used_RAslice.png',bbox_inches='tight')
+    #fig.savefig('taper_used_RAslice.png',bbox_inches='tight')
     
         
     ##else:
@@ -156,7 +157,11 @@ if args.taper_coords:
         
     ra = ra[taper]
     dec = dec[taper]
-    flux = new_flux[taper] - mean(new_flux[taper])
+    
+    if args.auto_zero:
+        flux = new_flux[taper] - mean(new_flux[taper])
+    else:
+        flux = new_flux[taper]
     
 print('There are %d sources in the tapered osm' %len(ra))
 

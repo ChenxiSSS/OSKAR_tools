@@ -684,7 +684,7 @@ def create_flagged_telescope(metafits=None,antenna_coord_file=None,azimuth=None,
         out_file.close()
         
 def add_data_to_uvfits(v_container=None,time_ind=None,num_baselines=None,template_baselines=None,
-    chan=None,num_oskar_channels='False',oskar_ind=False,uu=None,vv=None,ww=None,float_jd_array=None,
+    chan=None,num_oskar_channels='False',oskar_ind='False',uu=None,vv=None,ww=None,float_jd_array=None,
     baselines_array=None,date_array=None,undo_phase_track=True,xx_res=None,xx_ims=None,
     xy_res=None,xy_ims=None,yx_res=None,yx_ims=None,yy_res=None,yy_ims=None,x_lengths=None,y_lengths=None,
     z_lengths=None,uus=None,vvs=None,wws=None,tstep=None,freq=None,ch_width=None,central_freq_chan=None,

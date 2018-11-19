@@ -40,10 +40,10 @@ parser.add_option('--debug',default=False,action='store_true', help='Enable to d
 parser.add_option('--antenna_coord_file',default='%s/telescopes/MWA_phase1/MWATools-antenna_locations.txt' %OSKAR_dir,
                   help='If creating a telescope model with dipole flags, use this as the array layout. Defaults to MWA_phase1 ($OSKAR_TOOLS/telescopes/MWA_phase1/MWATools-antenna_locations.txt)')
 parser.add_option('--healpix', default=False, help='Enter healpix tag to use base images NOT CURRENTLY USED')
-parser.add_option('--fit_osm', default=False, help='Location of sky parameters to create osm from')
+parser.add_option('--fit_osm', default=False, help='Location of sky parameters to create osm from NOT CURRENTLY USED')
 parser.add_option( '--ini_file', default=False, help='Enter template oskar .ini - defaults to the template .ini located in $OSKAR_TOOLS/telescopes/--telescope')
 parser.add_option('--flag_dipoles',default=False,action='store_true', help='Add to switch on dipole flagging via the metafits file. NOTE needs a metafits that has the correct data within')
-parser.add_option('--do_phase_track',default=False,
+parser.add_option('--do_phase_track',default=False,action='store_true',
     help='Add to leave the default phase tracking done by OSKAR (phase track the RA,DEC in the metafits). OPTIONAL - can also set the phase centre explicitly using --phase_centre')
 parser.add_option('--phase_centre',default=False,
     help='Set phase centre and leave in phase tracking in final uvfits. Usage: --phase_centre=ra,dec with ra,dec in deg')
@@ -109,7 +109,10 @@ if options.freq_int:
     ch_width = float(options.freq_int)
     low_freq = base_low_freq + (ch_width / 2.0)
 
+print('IS IT TRUE',options.chips_settings)
+print(options)
 if options.chips_settings:
+    print("HERE MAAAAAN WOT")
     ch_width = 80e+3
     time_int = 8.0
     low_freq = base_low_freq - (ch_width / 2.0)
@@ -246,6 +249,9 @@ date_array = zeros(n_data)
 
 ###Go to the temporary dir
 chdir(tmp_dir)
+
+
+print('HEY HEY HEY',ch_width)
 
 ##Depending on which type of foreground model is required,
 ##generate or declare the osm

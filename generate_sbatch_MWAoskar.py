@@ -10,7 +10,7 @@ def write_oskar(wd=None, metafits=None, srclist=None, oskar_uvfits_tag=None, tim
                 data_dir=None, telescope=None, time_int=None, ini_file=None, jobs_per_GPU=None,
                 flag_dipoles=None, cluster=None,retain_vis_file=None,retain_ini_file=None,
                 do_phase_track=False,full_sky_healpix=False,freq_int=False,
-                chips_settings=False,phase_centre=False,full_chips=False):
+                chips_settings=False,phase_centre=False,full_chips=False,all_chans=False):
     '''Writes a bash script for each course band to run OSKAR'''
     
     start, finish = map(float,time.split(','))
@@ -52,8 +52,8 @@ def write_oskar(wd=None, metafits=None, srclist=None, oskar_uvfits_tag=None, tim
         out_file.write('#SBATCH --account=oz048\n')
         out_file.write('#SBATCH --gres=gpu:1\n')
         out_file.write('#SBATCH --mem=16384\n')
-        out_file.write('source /home/jline/software/OSKAR_tools/cluster_modles/load_ozstar.sh\n')
-        out_file.write('source /home/jline/software/OSKAR_tools/init_OSKAR_tools.sh\n')
+        out_file.write('source /fred/oz048/MWA/CODE/OSKAR_tools/cluster_modles/load_ozstar.sh\n')
+        out_file.write('source /fred/oz048/MWA/CODE/OSKAR_tools/init_OSKAR_tools.sh\n')
 
     out_file.write('cd %s\n' %wd)
 
@@ -89,6 +89,8 @@ def write_oskar(wd=None, metafits=None, srclist=None, oskar_uvfits_tag=None, tim
         oskar_options += ' --chips_settings'
     if options.full_chips:
         oskar_options += ' --full_chips'
+    if all_chans:
+        oskar_options += ' --all_chans'
 
     
     out_file.write('time %s/MWAobs_oskar.py %s\n' %(OSKAR_dir, oskar_options))
@@ -161,6 +163,8 @@ parser.add_option('--chips_settings', default=False, action='store_true',
 parser.add_option('--full_chips', default=False, action='store_true',help='Instead of missing freq channels, simulate full band coverage in CHIPS mode')
 parser.add_option('--phase_centre',default=False,
     help='Set phase centre and leave in phase tracking in final uvfits. Usage: --phase_centre=ra,dec with ra,dec in deg')
+parser.add_option('--all_chans', default=False, action='store_true',
+    help='Instead of missing fine freq channels, do a complete 32 chan simulation')
 
 
 
@@ -207,6 +211,7 @@ full_sky_healpix = options.full_sky_healpix
 freq_int = options.freq_int
 chips_settings = options.chips_settings
 phase_centre = options.phase_centre
+all_chans=options.all_chans
 
 if srclist:
     pass
@@ -244,7 +249,7 @@ for band_num in band_nums:
     oskar_slurm = write_oskar(wd=wd, metafits=metafits, srclist=srclist, oskar_uvfits_tag=oskar_uvfits_tag, time=time, band_num=band_num, data_dir=output_dir,
         telescope=telescope, time_int=time_int, ini_file=ini_file, flag_dipoles=flag_dipoles, cluster=options.cluster, retain_vis_file=retain_vis_file,
         retain_ini_file=retain_ini_file, do_phase_track=do_phase_track, full_sky_healpix=full_sky_healpix,freq_int=freq_int,
-        chips_settings=chips_settings,phase_centre=phase_centre)
+        chips_settings=chips_settings,phase_centre=phase_centre,all_chans=all_chans)
     
     oskar_slurms.append(oskar_slurm)
     

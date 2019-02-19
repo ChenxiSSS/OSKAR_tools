@@ -109,10 +109,8 @@ if options.freq_int:
     ch_width = float(options.freq_int)
     low_freq = base_low_freq + (ch_width / 2.0)
 
-print('IS IT TRUE',options.chips_settings)
-print(options)
 if options.chips_settings:
-    print("HERE MAAAAAN WOT")
+    # print("HERE MAAAAAN WOT")
     ch_width = 80e+3
     time_int = 8.0
     low_freq = base_low_freq - (ch_width / 2.0)
@@ -162,7 +160,6 @@ for baseline in template_baselines:
 x_lengths = array(x_lengths)
 y_lengths = array(y_lengths)
 z_lengths = array(z_lengths)
-
 
 if options.ini_file:
     template_ini = options.ini_file
@@ -229,6 +226,9 @@ if options.phase_centre:
     initial_ra_point,dec_point = map(float,options.phase_centre.split(','))
     undo_phase_track = False
 
+
+ha_point = initial_lst - initial_ra_point
+
 ##Sidereal seconds per solar seconds - ie if 1s passes on
 ##the clock, sky has moved by 1.00274 secs of angle
 SOLAR2SIDEREAL = 1.00274
@@ -250,8 +250,6 @@ date_array = zeros(n_data)
 ###Go to the temporary dir
 chdir(tmp_dir)
 
-
-print('HEY HEY HEY',ch_width)
 
 ##Depending on which type of foreground model is required,
 ##generate or declare the osm
@@ -367,8 +365,17 @@ def the_main_loop(tsteps=None):
                     oskar_gsm=oskar_gsm,oskar_gsm_file=oskar_gsm_file,oskar_gsm_SI=oskar_gsm_SI)
 
         ##Run the simulation
-        cmd = "oskar_sim_interferometer --quiet %s.ini" %prefix_name
-        run_command(cmd)
+        if undo_phase_track:
+            ##Run the simulation
+            environ["LD_LIBRARY_PATH"] = environ["OSK_NOTRACK_LD"]
+            cmd = "%s/oskar_sim_interferometer --quiet %s.ini" %(environ["OSK_NOTRACK_BIN"],prefix_name)
+            run_command(cmd)
+
+        else:
+            ##Run the simulation
+            environ["LD_LIBRARY_PATH"] = environ["OSK_TRACK_LD"]
+            cmd = "%s/oskar_sim_interferometer --quiet %s.ini" %(environ["OSK_TRACK_BIN"],prefix_name) 
+            run_command(cmd)
 
         ##Read in the data directly from the binary file
         ##This file contains all frequency channels for this time step
@@ -417,7 +424,8 @@ def the_main_loop(tsteps=None):
                     xy_res=xy_res,xy_ims=xy_ims,yx_res=yx_res,yx_ims=yx_ims,yy_res=yy_res,yy_ims=yy_ims,
                     x_lengths=x_lengths,y_lengths=y_lengths,z_lengths=z_lengths,uus=uus,vvs=vvs,wws=wws,
                     tstep=tstep,freq=freq,ch_width=ch_width,central_freq_chan=central_freq_chan,chips_settings=options.chips_settings,
-                    full_chips=options.full_chips,gain_correction=beam_gain)
+                    full_chips=options.full_chips,gain_correction=beam_gain,
+                    ha_point=ha_point*D2R,dec_point=dec_point*D2R)
 
 
     ##If we want other sky model behaviours, i.e. curvature to the spectrum,
@@ -449,8 +457,17 @@ def the_main_loop(tsteps=None):
                     oskar_gsm=oskar_gsm,oskar_gsm_file=oskar_gsm_file,oskar_gsm_SI=oskar_gsm_SI)
 
             ##Run the simulation
-            cmd = "oskar_sim_interferometer --quiet %s.ini" %prefix_name
-            run_command(cmd)
+            if undo_phase_track:
+                ##Run the simulation
+                environ["LD_LIBRARY_PATH"] = environ["OSK_NOTRACK_LD"]
+                cmd = "/usr/local/OSKAR-2.7.0-Source_notrack/install/bin/oskar_sim_interferometer --quiet %s.ini" %prefix_name
+                run_command(cmd)
+
+            else:
+                ##Run the simulation
+                environ["LD_LIBRARY_PATH"] = environ["OSK_TRACK_LD"]
+                cmd = "/usr/local/OSKAR-2.7.0-Source/install/bin/oskar_sim_interferometer --quiet %s.ini" %prefix_name
+                run_command(cmd)
 
             ##Read in the data directly from the binary file
             ##Only one freq channel so number of vis is number of baselines
@@ -484,7 +501,8 @@ def the_main_loop(tsteps=None):
                     undo_phase_track=undo_phase_track,xx_res=xx_res,xx_ims=xx_ims,xy_res=xy_res,xy_ims=xy_ims,yx_res=yx_res,
                     yx_ims=yx_ims,yy_res=yy_res,yy_ims=yy_ims,x_lengths=x_lengths,y_lengths=y_lengths,z_lengths=z_lengths,
                     uus=uus,vvs=vvs,wws=wws,tstep=tstep,freq=freq,ch_width=ch_width,central_freq_chan=central_freq_chan,
-                    chips_settings=options.chips_settings,full_chips=options.full_chips,gain_correction=beam_gain)
+                    chips_settings=options.chips_settings,full_chips=options.full_chips,gain_correction=beam_gain,
+                    ha_point=ha_point*D2R,dec_point=dec_point*D2R)
 
     if options.chips_settings:
         output_uvfits_name = "%s/%s_chips-t%02d_f%.3f_band%02d.uvfits" %(data_dir,outname,time_int,ch_width/1e+6,band_num)

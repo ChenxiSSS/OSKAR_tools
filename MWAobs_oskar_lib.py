@@ -2,7 +2,7 @@
 from subprocess import call
 from sys import exit
 from optparse import OptionParser
-from numpy import zeros, pi, sin, cos, real, imag, loadtxt, array, floor, arange, ones, where, ceil
+from numpy import zeros, pi, sin, cos, real, imag, loadtxt, array, floor, arange, ones, where, ceil, savez_compressed
 from numpy import exp as n_exp
 from ephem import Observer
 from cmath import exp
@@ -86,7 +86,16 @@ def get_uvw_zenith(x_length=None,y_length=None,z_length=None):
     dec = MWA_LAT*D2R
 
     u = sin(ha)*x_length + cos(ha)*y_length
-    v = sin(dec)*cos(ha)*x_length + sin(dec)*sin(ha)*y_length + cos(dec)*z_length
+    v = -sin(dec)*cos(ha)*x_length + sin(dec)*sin(ha)*y_length + cos(dec)*z_length
+    w = cos(dec)*cos(ha)*x_length - cos(dec)*sin(ha)*y_length + sin(dec)*z_length
+
+    return u,v,w
+
+def get_uvw(x_length=None,y_length=None,z_length=None,ha=None,dec=None):
+    '''Takes the baseline length in meters and returns the u,v,w at a given
+    hour angle and declination (both in radians)'''
+    u = sin(ha)*x_length + cos(ha)*y_length
+    v = -sin(dec)*cos(ha)*x_length + sin(dec)*sin(ha)*y_length + cos(dec)*z_length
     w = cos(dec)*cos(ha)*x_length - cos(dec)*sin(ha)*y_length + sin(dec)*z_length
 
     return u,v,w
@@ -688,7 +697,7 @@ def add_data_to_uvfits(v_container=None,time_ind=None,num_baselines=None,templat
     baselines_array=None,date_array=None,undo_phase_track=True,xx_res=None,xx_ims=None,
     xy_res=None,xy_ims=None,yx_res=None,yx_ims=None,yy_res=None,yy_ims=None,x_lengths=None,y_lengths=None,
     z_lengths=None,uus=None,vvs=None,wws=None,tstep=None,freq=None,ch_width=None,central_freq_chan=None,
-    chips_settings=False,gain_correction=False,full_chips=False):
+    chips_settings=False,gain_correction=False,full_chips=False,dec_point=None,ha_point=None):
 
     time_ind_lower = time_ind*num_baselines
 
@@ -717,25 +726,16 @@ def add_data_to_uvfits(v_container=None,time_ind=None,num_baselines=None,templat
     chan_yy_res = yy_res[osk_low:osk_high]
     chan_yy_ims = yy_ims[osk_low:osk_high]
 
-
-
     ##Make complex numpy arrays
     comp_xx = make_complex(chan_xx_res,chan_xx_ims)
     comp_xy = make_complex(chan_xy_res,chan_xy_ims)
     comp_yx = make_complex(chan_yx_res,chan_yx_ims)
     comp_yy = make_complex(chan_yy_res,chan_yy_ims)
 
-    ##Remove the phase tracking added in by OSKAR if requested
-    if undo_phase_track:
-        final_xx = rotate_phase(wws=chan_ww,visibilities=comp_xx)
-        final_xy = rotate_phase(wws=chan_ww,visibilities=comp_xy)
-        final_yx = rotate_phase(wws=chan_ww,visibilities=comp_yx)
-        final_yy = rotate_phase(wws=chan_ww,visibilities=comp_yy)
-    else:
-        final_xx = comp_xx
-        final_xy = comp_xy
-        final_yx = comp_yx
-        final_yy = comp_yy
+    final_xx = comp_xx
+    final_xy = comp_xy
+    final_yx = comp_yx
+    final_yy = comp_yy
 
     #print oskar_ind,chan_ww[112],freq,comp_xx[112],rotated_xx[112]
 
@@ -789,17 +789,10 @@ def add_data_to_uvfits(v_container=None,time_ind=None,num_baselines=None,templat
     if chan == central_freq_chan:
         central_freq_chan_value = freq_cent
 
-        ##u,v,w stored in seconds by uvfits files
-        ##if removing phase tracking, set 0 coords of u,v,w to zenith
-        if undo_phase_track:
-            final_uu,final_vv,final_ww = get_uvw_zenith(x_length=x_lengths,y_length=y_lengths,z_length=z_lengths)
-            final_uu /= freq_cent
-            final_vv /= freq_cent
-            final_ww /= freq_cent
-        else:
-            final_uu = chan_uu / freq_cent
-            final_vv = chan_vv / freq_cent
-            final_ww = chan_ww / freq_cent
+        # ##u,v,w stored in seconds by uvfits files
+        final_uu = chan_uu / freq_cent
+        final_vv = chan_vv / freq_cent
+        final_ww = chan_ww / freq_cent
 
         uus[time_ind_lower:time_ind_lower+num_baselines] = final_uu
         vvs[time_ind_lower:time_ind_lower+num_baselines] = final_vv
@@ -810,6 +803,6 @@ def add_data_to_uvfits(v_container=None,time_ind=None,num_baselines=None,templat
 
         ##Fill in the fractional julian date, after adding on the appropriate amount of
         ##time - /(24*60*60) because julian number is a fraction of a whole day
-        adjust_float_jd_array = float_jd_array + (float(tstep) / (24.0*60.0*60.0))
+        adjust_float_jd_array = float_jd_array + (float(tstep) / (24.0*60.0*60.0)) #+ (4.0 / (24.0*60.0*60.0))
 
         date_array[time_ind_lower:time_ind_lower+num_baselines] = adjust_float_jd_array

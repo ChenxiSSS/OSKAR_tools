@@ -374,7 +374,7 @@ def the_main_loop(tsteps=None):
         else:
             ##Run the simulation
             environ["LD_LIBRARY_PATH"] = environ["OSK_TRACK_LD"]
-            cmd = "%s/oskar_sim_interferometer --quiet %s.ini" %(environ["OSK_TRACK_BIN"],prefix_name) 
+            cmd = "%s/oskar_sim_interferometer --quiet %s.ini" %(environ["OSK_TRACK_BIN"],prefix_name)
             run_command(cmd)
 
         ##Read in the data directly from the binary file
@@ -460,13 +460,13 @@ def the_main_loop(tsteps=None):
             if undo_phase_track:
                 ##Run the simulation
                 environ["LD_LIBRARY_PATH"] = environ["OSK_NOTRACK_LD"]
-                cmd = "/usr/local/OSKAR-2.7.0-Source_notrack/install/bin/oskar_sim_interferometer --quiet %s.ini" %prefix_name
+                cmd = "%s/oskar_sim_interferometer --quiet %s.ini" %(environ["OSK_NOTRACK_BIN"],prefix_name)
                 run_command(cmd)
 
             else:
                 ##Run the simulation
                 environ["LD_LIBRARY_PATH"] = environ["OSK_TRACK_LD"]
-                cmd = "/usr/local/OSKAR-2.7.0-Source/install/bin/oskar_sim_interferometer --quiet %s.ini" %prefix_name
+                cmd = "%s/oskar_sim_interferometer --quiet %s.ini" %(environ["OSK_TRACK_BIN"],prefix_name)
                 run_command(cmd)
 
             ##Read in the data directly from the binary file

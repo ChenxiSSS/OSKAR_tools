@@ -42,7 +42,7 @@ parser.add_option('-f','--healpix', default=False, help='Enter healpix tag to us
 parser.add_option('-g','--fit_osm', default=False, help='Location of sky parameters to create osm from')
 parser.add_option('-i', '--ini_file', default=False, help='Enter template oskar .ini - defaults to the template .ini located in $OSKAR_TOOLS/telescopes/--telescope')
 parser.add_option('-j','--flag_dipoles',default=False,action='store_true', help='Add to switch on dipole flagging via the metafits file. NOTE needs a metafits that has the correct data within')
-parser.add_option('-k','--no_phase_track',default=True,action='store_false', help='Add to switch off phase tracking')
+parser.add_option('-k','--no_phase_track',default=False,action='store_true', help='Add to switch off phase tracking')
 
 parser.add_option('-o','--data_dir', help='Where to output the finished uvfits - default is ./data',default=False)
 parser.add_option('-m','--metafits', help='Enter name of metafits file to base obs on')
@@ -74,7 +74,7 @@ try:
 except Exception,e:
     print 'Unable to open metafits file %s: %s' % (options.metafits,e)
     exit(1)
-    
+
 def test_avail(key):
     if not key in f[0].header.keys():
         print 'Cannot find %s in %s' % (key,options.metafits)
@@ -93,7 +93,7 @@ oskar_date = "%s-%s-%s %s" %(day,month,year,time)
 time_int = float(options.time_int)
 low_freq = float(options.low_freq)
 
-##ephem Observer class, use this to compute LST from the date of the obs 
+##ephem Observer class, use this to compute LST from the date of the obs
 MRO = Observer()
 ##Set the observer at Boolardy
 MRO.lat, MRO.long, MRO.elevation = '-26:42:11.95', '116:40:14.93', 0
@@ -114,10 +114,10 @@ telescope_name = options.telescope.split('/')[-1]
 num_stations = 512
 num_baselines = (num_stations - 1) * (num_stations / 2)
 
-#course_band_width = 125e+3
-#fine_chan_width = 1e+3
-course_band_width = 1e+5
-fine_chan_width = 5e+4
+# course_band_width = 125e+3
+# fine_chan_width = 1e+3
+course_band_width = 10.2e+6
+fine_chan_width = 200e+3
 num_freq_channels = int(course_band_width / fine_chan_width)
 
 oskar_gsm = options.oskar_gsm
@@ -151,7 +151,7 @@ if options.ini_file:
 else:
     template_ini = "%s/template_%s.ini" %(telescope_dir,telescope_name)
 template_ini = open(template_ini).read().split('\n')
-    
+
 ##Unflagged channel numbers
 good_chans = arange(num_freq_channels)
 #central_freq_chan = 15
@@ -189,20 +189,20 @@ else:
 ##Sidereal seconds per solar seconds - ie if 1s passes on
 ##the clock, sky has moved by 1.00274 secs of angle
 SOLAR2SIDEREAL = 1.00274
-    
+
 int_jd, float_jd = calc_jdcal(oskar_date)
 #print int_jd, float_jd
 
-##Need an array the length of number of baselines worth of the fractional jd date
-float_jd_array = ones(num_baselines)*float_jd
-
-##Create empty data structures for final uvfits file
-v_container = zeros((n_data,1,1,1,num_freq_channels,4,3))
-uus = zeros(n_data)
-vvs = zeros(n_data)
-wws = zeros(n_data)
-baselines_array = zeros(n_data)
-date_array = zeros(n_data)
+# ##Need an array the length of number of baselines worth of the fractional jd date
+# float_jd_array = ones(num_baselines)*float_jd
+#
+# ##Create empty data structures for final uvfits file
+# v_container = zeros((n_data,1,1,1,num_freq_channels,4,3))
+# uus = zeros(n_data)
+# vvs = zeros(n_data)
+# wws = zeros(n_data)
+# baselines_array = zeros(n_data)
+# date_array = zeros(n_data)
 
 ###Go to the temporary dir
 chdir(tmp_dir)
@@ -215,7 +215,7 @@ elif options.srclist:
     ##For frequency channel in band
     for chan in good_chans:
         freq = base_freq + (chan*ch_width)
-        ##Sky model is the same for all time steps as OSKAR does the horizon clipping itself - 
+        ##Sky model is the same for all time steps as OSKAR does the horizon clipping itself -
         ##only generate one for all timesteps
         sky_osm_name = "%s_%.3f.osm" %(outname,freq/1e+6)
         ##Create the sky model at the obs frequency - this way we can half mimic spectral curvature
@@ -228,7 +228,7 @@ else:
     print("No valid sky model option declared; need either --osm, --srclist, --fit_osm")
     print("Exiting now")
     exit(0)
-    
+
 ###Create a copy of the telescope model===============================
 ##Add in a permitted_beams.txt file to stop the beam phase tracking
 ##If requested, flag dipoles via metafits file TODO
@@ -254,13 +254,13 @@ else:
     ##Just copy the template telescope
     cmd = 'cp -r %s %s/telescope_%s_band%02d' %(telescope_dir,tmp_dir,outname,band_num)
     run_command(cmd)
-    
+
     ##Reset the telescope_dir to copied location
     telescope_dir = '%s/telescope_%s_band%02d' %(tmp_dir,outname,band_num)
-    
+
     #OSKAR naturally beam forms towards phase centre
     #Read the pointing from the metafits and force observation towards single pointing
-    
+
     ##All stations found through the following search - set all to point at same spot
     #stations = next(walk('%s' %telescope_dir))[1]
     #for station in stations:
@@ -279,50 +279,51 @@ save_ms = options.save_ms
 #@profile
 def the_main_loop(tsteps=None):
     if options.osm:
-        
+
         ##Make prefix name for the individual time step
         ##If less than second time step, RTS needs a different naming convention
         #prefix_name = "%s_band%02d_%.3f" %(outname,band_num,tstep)
         prefix_name = "%s_band%02d_t%.1f-%.1f" %(outname,band_num,tsteps[0],tsteps[-1])
-        
+
         ##Start at the first good_chan freq, and do enough chans to cover first good chan to last good chan
         num_channels = len(good_chans)
         oskar_channels = range(good_chans[0],good_chans[-1]+1)
-        
+
         #print oskar_channels
-        
+
         oskar_inds = [oskar_channels.index(good_chan) for good_chan in good_chans]
         num_oskar_channels = len(oskar_channels)
         #print "NUM CHANNELS",num_channels
         osk_low_freq = base_freq + (good_chans[0]*fine_chan_width)
         #osk_low_freq = base_freq
-        
+
         num_time_steps = len(tsteps)
         obs_time_length = num_time_steps * time_int
-        
+
         #oskar_date
-        
+
         make_ini(prefix_name=prefix_name,ra=initial_ra_point,dec=dec_point,freq=osk_low_freq,start_time=oskar_date,
                     sky_osm_name=options.osm,healpix=healpix,num_channels=num_oskar_channels,
                     template_ini=template_ini,ch_width=fine_chan_width,time_int=time_int,
                     telescope_dir=telescope_dir,num_time_steps=num_time_steps,obs_time_length=obs_time_length,
                     oskar_gsm=oskar_gsm,oskar_gsm_file=oskar_gsm_file,oskar_gsm_SI=oskar_gsm_SI,save_ms=save_ms)
-        
+
         ##Run the simulation
-        cmd = "oskar_sim_interferometer --quiet %s.ini" %prefix_name
+        environ["LD_LIBRARY_PATH"] = environ["OSK_TRACK_LD"]
+        cmd = "%s/oskar_sim_interferometer --quiet %s.ini" %(environ["OSK_TRACK_BIN"],prefix_name)
         run_command(cmd)
-        
+
         ###Read in the data directly from the binary file
         ###This file contains all frequency channels for this time step
         ##num_vis = num_baselines * num_oskar_channels * num_time_steps
         #num_vis = num_oskar_channels * num_time_steps
-        
+
         #uu,vv,ww,xx_res,xx_ims,xy_res,xy_ims,yx_res,yx_ims,yy_res,yy_ims = read_oskar_binary(filename="%s.vis" %prefix_name,num_time_steps=num_time_steps,num_channels=num_oskar_channels,num_baselines=num_baselines)
 
         ###Useful for checking what is actually coming out of OSKAR
         ##cmd = "oskar_vis_to_ascii_table -p 4 %s.vis" %prefix_name
         ##run_command(cmd)
-        
+
         ##Clean up the oskar outputs
         if options.retain_vis_file and options.retain_ini_file:
             pass
@@ -334,32 +335,32 @@ def the_main_loop(tsteps=None):
             else:
                 cmd = "rm %s.ini %s.vis" %(prefix_name,prefix_name)
             run_command(cmd)
-        
+
         ####For each time step
         #for time_ind,tstep in enumerate(tsteps):
-            ###Precess ra by time since the beginning of the observation 
+            ###Precess ra by time since the beginning of the observation
             ###(convert time to angle, change from seconds to degrees)
             ###Include half of the time step
             #time = add_time(oskar_date,tstep)
-            
+
             ###If we are using a sky model with fixed spectral indexes, can run all
             ###frequencies using the same osm model, and so only need to run OSKAR once
             ###per time step
             #for oskar_ind,chan in zip(oskar_inds,good_chans):
                 #freq = base_freq + (chan*ch_width)
-                
+
                 #if chan == central_freq_chan:
                     #freq_cent = freq + (ch_width / 2.0)
                     #central_freq_chan_value = freq_cent
-                
+
                 #add_data_to_uvfits(v_container=v_container,time_ind=time_ind,num_baselines=num_baselines,template_baselines=template_baselines,
                     #chan=chan,num_oskar_channels=num_oskar_channels,oskar_ind=oskar_ind,uu=uu,vv=vv,ww=ww,float_jd_array=float_jd_array,
                     #baselines_array=baselines_array,date_array=date_array,undo_phase_track=undo_phase_track,xx_res=xx_res,xx_ims=xx_ims,
                     #xy_res=xy_res,xy_ims=xy_ims,yx_res=yx_res,yx_ims=yx_ims,yy_res=yy_res,yy_ims=yy_ims,
                     #x_lengths=x_lengths,y_lengths=y_lengths,z_lengths=z_lengths,uus=uus,vvs=vvs,wws=wws,
                     #tstep=tstep,freq=freq,ch_width=ch_width,central_freq_chan=central_freq_chan)
-                
-            
+
+
     ##If we want other sky model behaviours, i.e. curvature to the spectrum,
     ##must generate a sky model for every fine channel. Two methods: RTS style
     ##extrapolation between points, or use a fit of a 2nd order polynomial
@@ -367,18 +368,18 @@ def the_main_loop(tsteps=None):
     else:
         ###For frequency channel in band
         for chan in good_chans:
-            
+
             if chan == central_freq_chan:
                 freq_cent = freq + (ch_width / 2.0)
                 central_freq_chan_value = freq_cent
-            
+
             ##Take the band base_freq and add on fine channel freq
             freq = base_freq + (chan*ch_width)
             prefix_name = "%s_%.3f" %(outname,freq/1e+6)
-            
+
             ##Create ini file to run oskar
             sky_osm_name = "%s_%.3f.osm" %(outname,freq/1e+6)
-           
+
             num_time_steps = len(tsteps)
             obs_time_length = num_time_steps * time_int
 
@@ -387,11 +388,12 @@ def the_main_loop(tsteps=None):
                     template_ini=template_ini,ch_width=ch_width,time_int=time_int,
                     telescope_dir=telescope_dir,num_time_steps=num_time_steps,obs_time_length=obs_time_length,
                     oskar_gsm=oskar_gsm,oskar_gsm_file=oskar_gsm_file,oskar_gsm_SI=oskar_gsm_SI)
-            
+
             ##Run the simulation
-            cmd = "oskar_sim_interferometer --quiet %s.ini" %prefix_name
+            environ["LD_LIBRARY_PATH"] = environ["OSK_TRACK_LD"]
+            cmd = "%s/oskar_sim_interferometer --quiet %s.ini" %(environ["OSK_TRACK_BIN"],prefix_name)
             run_command(cmd)
-            
+
             ##Read in the data directly from the binary file
             ##Only one freq channel so number of vis is number of baselines
             #uu,vv,ww,xx_res,xx_ims,xy_res,xy_ims,yx_res,yx_ims,yy_res,yy_ims = read_oskar_binary(filename="%s.vis" %prefix_name,num_vis=num_baselines,num_baselines=num_baselines)
@@ -399,32 +401,32 @@ def the_main_loop(tsteps=None):
             ##Read in the data directly from the binary file
             ##This file contains a single freq channel with all time steps
             #num_vis = num_baselines * num_oskar_channels * num_time_steps
+            #
+            # uu,vv,ww,xx_res,xx_ims,xy_res,xy_ims,yx_res,yx_ims,yy_res,yy_ims = read_oskar_binary(filename="%s.vis" %prefix_name,num_time_steps=num_time_steps,num_channels=1,num_baselines=num_baselines)
+            #
+            # ##Clean up the oskar outputs
+            # if options.retain_vis_file and options.retain_ini_file:
+            #     pass
+            # else:
+            #     if options.retain_vis_file:
+            #         cmd = "rm %s.ini" %(prefix_name)
+            #     elif options.retain_ini_file:
+            #         cmd = "rm %s.vis" %(prefix_name)
+            #     else:
+            #         cmd = "rm %s.ini %s.vis" %(prefix_name,prefix_name)
+            #     run_command(cmd)
+            #
+            # ###For each time step
+            # for time_ind,tstep in enumerate(tsteps):
+            #     ##Precess ra by time since the beginning of the observation
+            #     ##(convert time to angle, change from seconds to degrees)
+            #     ##Include half of the time step
+            #     add_data_to_uvfits(v_container=v_container,time_ind=time_ind,num_baselines=num_baselines,template_baselines=template_baselines,
+            #         chan=chan,uu=uu,vv=vv,ww=ww,float_jd_array=float_jd_array,baselines_array=baselines_array,date_array=date_array,
+            #         undo_phase_track=undo_phase_track,xx_res=xx_res,xx_ims=xx_ims,xy_res=xy_res,xy_ims=xy_ims,yx_res=yx_res,
+            #         yx_ims=yx_ims,yy_res=yy_res,yy_ims=yy_ims,x_lengths=x_lengths,y_lengths=y_lengths,z_lengths=z_lengths,
+            #         uus=uus,vvs=vvs,wws=wws,tstep=tstep,freq=freq,ch_width=ch_width,central_freq_chan=central_freq_chan)
 
-            uu,vv,ww,xx_res,xx_ims,xy_res,xy_ims,yx_res,yx_ims,yy_res,yy_ims = read_oskar_binary(filename="%s.vis" %prefix_name,num_time_steps=num_time_steps,num_channels=1,num_baselines=num_baselines)
-
-            ##Clean up the oskar outputs
-            if options.retain_vis_file and options.retain_ini_file:
-                pass
-            else:
-                if options.retain_vis_file:
-                    cmd = "rm %s.ini" %(prefix_name)
-                elif options.retain_ini_file:
-                    cmd = "rm %s.vis" %(prefix_name)
-                else:
-                    cmd = "rm %s.ini %s.vis" %(prefix_name,prefix_name)
-                run_command(cmd)
-
-            ###For each time step
-            for time_ind,tstep in enumerate(tsteps):
-                ##Precess ra by time since the beginning of the observation 
-                ##(convert time to angle, change from seconds to degrees)
-                ##Include half of the time step
-                add_data_to_uvfits(v_container=v_container,time_ind=time_ind,num_baselines=num_baselines,template_baselines=template_baselines,
-                    chan=chan,uu=uu,vv=vv,ww=ww,float_jd_array=float_jd_array,baselines_array=baselines_array,date_array=date_array,
-                    undo_phase_track=undo_phase_track,xx_res=xx_res,xx_ims=xx_ims,xy_res=xy_res,xy_ims=xy_ims,yx_res=yx_res,
-                    yx_ims=yx_ims,yy_res=yy_res,yy_ims=yy_ims,x_lengths=x_lengths,y_lengths=y_lengths,z_lengths=z_lengths,
-                    uus=uus,vvs=vvs,wws=wws,tstep=tstep,freq=freq,ch_width=ch_width,central_freq_chan=central_freq_chan)
-                
     #output_uvfits_name = "%s/%s_t%02d_f%.3f_band%02d.uvfits" %(data_dir,outname,time_int,ch_width/1e+6,band_num)
     #print "Now creating uvfits file %s" %output_uvfits_name
     #create_uvfits(v_container=v_container,freq_cent=central_freq_chan_value,ra_point=initial_ra_point,
@@ -432,7 +434,7 @@ def the_main_loop(tsteps=None):
                 #date_array=date_array,date=oskar_date,central_freq_chan=central_freq_chan,ch_width=ch_width,
                 #template_uvfits=template_uvfits,int_jd=int_jd)
     #print "Written file %s" %output_uvfits_name
-    
+
     if save_ms:
         cmd = 'mv %s/*.ms %s' %(tmp_dir,data_dir)
         run_command(cmd)
@@ -452,9 +454,9 @@ else:
         ##Create ini file to run oskar
         cmd = "rm %s_%.3f.osm" %(outname,freq/1e+6)
         run_command(cmd)
-        
+
 cmd = 'rm -r %s/telescope_%s_band%02d' %(tmp_dir,outname,band_num)
 run_command(cmd)
-        
+
 chdir(cwd)
 #template_uvfits.close()

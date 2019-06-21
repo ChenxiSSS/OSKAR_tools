@@ -37,8 +37,6 @@ parser.add_option('--telescope', default='%s/telescopes/MWA_phase1' %OSKAR_dir, 
 parser.add_option('--band_num', help='Enter band number to simulate')
 parser.add_option('--osm', default=False, help='Location of OSKAR osm sky model to use')
 parser.add_option('--debug',default=False,action='store_true', help='Enable to debug with print statements')
-parser.add_option('--antenna_coord_file',default='%s/telescopes/MWA_phase1/MWATools-antenna_locations.txt' %OSKAR_dir,
-                  help='If creating a telescope model with dipole flags, use this as the array layout. Defaults to MWA_phase1 ($OSKAR_TOOLS/telescopes/MWA_phase1/MWATools-antenna_locations.txt)')
 parser.add_option('--healpix', default=False, help='Enter healpix tag to use base images NOT CURRENTLY USED')
 parser.add_option('--fit_osm', default=False, help='Location of sky parameters to create osm from NOT CURRENTLY USED')
 parser.add_option( '--ini_file', default=False, help='Enter template oskar .ini - defaults to the template .ini located in $OSKAR_TOOLS/telescopes/--telescope')
@@ -89,6 +87,23 @@ def test_avail(key):
 for key in ['DATE-OBS','FREQCENT','FINECHAN','INTTIME','BANDWDTH','AZIMUTH','ALTITUDE','RA','DEC']:
     test_avail(key)
 
+##Get the east, north, height antenna positions from the metafits
+##Tile positions are stored for both XX/YY pols so only
+##want to select half of them
+east = f[1].data['East']
+north = f[1].data['North']
+height = f[1].data['Height']
+
+##Create and fill a layout array
+layout_array = zeros((len(east)/2,3))
+selection = arange(0,len(east),2)
+
+##There is some kind of co-ordinate difference between the RTS and OSKAR, so
+##need to make all coords negative here
+## (trial and error found this gives the expected u,v,w coords)
+layout_array[:,0] = -east[selection]
+layout_array[:,1] = -north[selection]
+layout_array[:,2] = -height[selection]
 
 initial_date = f[0].header['DATE-OBS']
 ##Change in to oskar date format
@@ -136,30 +151,33 @@ template_baselines = template_uvfits[0].data['BASELINE'].copy()
 num_baselines = len(template_data)
 num_freq_channels = int(1.28e+6 / ch_width)
 
-oskar_gsm = options.oskar_gsm
-oskar_gsm_file = options.oskar_gsm_file
-oskar_gsm_SI = float(options.oskar_gsm_SI)
+X,Y,Z = enh2xyz(east[selection], north[selection],height[selection])
 
-antennas = {}
-xyz = template_uvfits[1].data['STABXYZ'].copy()
-for i in xrange(len(xyz)):
-    antennas['ANT%03d' %(i+1)] = xyz[i]
+template_uvfits[1].data['STABXYZ'][:,0] = X
+template_uvfits[1].data['STABXYZ'][:,1] = Y
+template_uvfits[1].data['STABXYZ'][:,2] = Z
 
 x_lengths = []
 y_lengths = []
 z_lengths = []
 
-for baseline in template_baselines:
-    ant2 = mod(baseline, 256)
-    ant1 = (baseline - ant2)/256
-    x_length,y_length,z_length = antennas['ANT%03d' %ant1] - antennas['ANT%03d' %ant2]
-    x_lengths.append(x_length)
-    y_lengths.append(y_length)
-    z_lengths.append(z_length)
+for ant1 in arange(len(X) - 1):
+    for ant2 in arange(ant1+1,len(X)):
+        x_length = X[ant1] - X[ant2]
+        y_length = Y[ant1] - Y[ant2]
+        z_length = Z[ant1] - Z[ant2]
+        x_lengths.append(x_length)
+        y_lengths.append(y_length)
+        z_lengths.append(z_length)
+
 
 x_lengths = array(x_lengths)
 y_lengths = array(y_lengths)
 z_lengths = array(z_lengths)
+
+oskar_gsm = options.oskar_gsm
+oskar_gsm_file = options.oskar_gsm_file
+oskar_gsm_SI = float(options.oskar_gsm_SI)
 
 if options.ini_file:
     template_ini = options.ini_file
@@ -250,7 +268,6 @@ date_array = zeros(n_data)
 ###Go to the temporary dir
 chdir(tmp_dir)
 
-
 ##Depending on which type of foreground model is required,
 ##generate or declare the osm
 if options.osm:
@@ -290,14 +307,16 @@ else:
     pass
 
 if options.flag_dipoles:
-    create_flagged_telescope(metafits=options.metafits,antenna_coord_file=options.antenna_coord_file,azimuth=azimuth,altitude=altitude,
-                                telescope_dir='%s/telescope_%s_band%02d' %(tmp_dir,outname,band_num))
+    create_flagged_telescope(metafits=options.metafits,layout_array=layout_array,azimuth=azimuth,altitude=altitude,
+                                telescope_dir=telescope_dir,new_telescope_dir='%s/telescope_%s_band%02d' %(tmp_dir,outname,band_num))
     ##Reset the telescope_dir to copied location
     telescope_dir = '%s/telescope_%s_band%02d' %(tmp_dir,outname,band_num)
 else:
     ##Just copy the template telescope
     cmd = 'cp -r %s %s/telescope_%s_band%02d' %(telescope_dir,tmp_dir,outname,band_num)
     run_command(cmd)
+
+    savetxt('%s/telescope_%s_band%02d/layout.txt' %(tmp_dir,outname,band_num),layout_array)
 
     ##Reset the telescope_dir to copied location
     telescope_dir = '%s/telescope_%s_band%02d' %(tmp_dir,outname,band_num)
@@ -364,18 +383,18 @@ def the_main_loop(tsteps=None):
                     telescope_dir=telescope_dir,num_time_steps=num_time_steps,obs_time_length=obs_time_length,
                     oskar_gsm=oskar_gsm,oskar_gsm_file=oskar_gsm_file,oskar_gsm_SI=oskar_gsm_SI)
 
+        # ##Run the simulation
+        # if undo_phase_track:
+        #     ##Run the simulation
+        #     environ["LD_LIBRARY_PATH"] = environ["OSK_NOTRACK_LD"]
+        #     cmd = "%s/oskar_sim_interferometer --quiet %s.ini" %(environ["OSK_NOTRACK_BIN"],prefix_name)
+        #     run_command(cmd)
+        #
+        # else:
         ##Run the simulation
-        if undo_phase_track:
-            ##Run the simulation
-            environ["LD_LIBRARY_PATH"] = environ["OSK_NOTRACK_LD"]
-            cmd = "%s/oskar_sim_interferometer --quiet %s.ini" %(environ["OSK_NOTRACK_BIN"],prefix_name)
-            run_command(cmd)
-
-        else:
-            ##Run the simulation
-            environ["LD_LIBRARY_PATH"] = environ["OSK_TRACK_LD"]
-            cmd = "%s/oskar_sim_interferometer --quiet %s.ini" %(environ["OSK_TRACK_BIN"],prefix_name)
-            run_command(cmd)
+        environ["LD_LIBRARY_PATH"] = environ["OSK_TRACK_LD"]
+        cmd = "%s/oskar_sim_interferometer --quiet %s.ini" %(environ["OSK_TRACK_BIN"],prefix_name)
+        run_command(cmd)
 
         ##Read in the data directly from the binary file
         ##This file contains all frequency channels for this time step
@@ -456,18 +475,18 @@ def the_main_loop(tsteps=None):
                     telescope_dir=telescope_dir,num_time_steps=num_time_steps,obs_time_length=obs_time_length,
                     oskar_gsm=oskar_gsm,oskar_gsm_file=oskar_gsm_file,oskar_gsm_SI=oskar_gsm_SI)
 
-            ##Run the simulation
-            if undo_phase_track:
-                ##Run the simulation
-                environ["LD_LIBRARY_PATH"] = environ["OSK_NOTRACK_LD"]
-                cmd = "%s/oskar_sim_interferometer --quiet %s.ini" %(environ["OSK_NOTRACK_BIN"],prefix_name)
-                run_command(cmd)
-
-            else:
-                ##Run the simulation
-                environ["LD_LIBRARY_PATH"] = environ["OSK_TRACK_LD"]
-                cmd = "%s/oskar_sim_interferometer --quiet %s.ini" %(environ["OSK_TRACK_BIN"],prefix_name)
-                run_command(cmd)
+            # ##Run the simulation
+            # if undo_phase_track:
+            #     ##Run the simulation
+            #     environ["LD_LIBRARY_PATH"] = environ["OSK_NOTRACK_LD"]
+            #     cmd = "%s/oskar_sim_interferometer --quiet %s.ini" %(environ["OSK_NOTRACK_BIN"],prefix_name)
+            #     run_command(cmd)
+            #
+            # else:
+            #     ##Run the simulation
+            environ["LD_LIBRARY_PATH"] = environ["OSK_TRACK_LD"]
+            cmd = "%s/oskar_sim_interferometer --quiet %s.ini" %(environ["OSK_TRACK_BIN"],prefix_name)
+            run_command(cmd)
 
             ##Read in the data directly from the binary file
             ##Only one freq channel so number of vis is number of baselines

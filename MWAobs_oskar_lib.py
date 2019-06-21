@@ -2,7 +2,7 @@
 from subprocess import call
 from sys import exit
 from optparse import OptionParser
-from numpy import zeros, pi, sin, cos, real, imag, loadtxt, array, floor, arange, ones, where, ceil, savez_compressed
+from numpy import zeros, pi, sin, cos, real, imag, loadtxt, array, floor, arange, ones, where, ceil, savez_compressed, savetxt
 from numpy import exp as n_exp
 from ephem import Observer
 from cmath import exp
@@ -26,6 +26,16 @@ R2D = 180.0 / pi
 D2R = pi / 180.0
 MWA_LAT = -26.7033194444
 VELC = 299792458.0
+
+def enh2xyz(east,north,height,latitude=MWA_LAT*D2R):
+    '''Takes east, north, height coords out of the metafits file,
+    and returns local X,Y,Z coords to put in the uvfits file'''
+    sl = sin(latitude)
+    cl = cos(latitude)
+    X = -north*sl + height*cl
+    Y = east
+    Z = north*cl + height*sl
+    return X,Y,Z
 
 def add_time(date_time,time_step):
     '''Take the time string format that oskar uses ('23-08-2013 17:54:32.0'), and add a time time_step (seconds).
@@ -410,7 +420,8 @@ def read_oskar_binary(filename=None,num_time_steps=None,num_baselines=None,num_c
 
         filled_uvws += (num_baselines*time_steps_per_block[block_ind])
 
-    return uus,vvs,wws,xx_res,xx_ims,xy_res,xy_ims,yx_res,yx_ims,yy_res,yy_ims
+    rts_scale = 1.0
+    return uus,vvs,wws,xx_res*rts_scale,xx_ims*rts_scale,xy_res*rts_scale,xy_ims*rts_scale,yx_res*rts_scale,yx_ims*rts_scale,yy_res*rts_scale,yy_ims*rts_scale
 
 def make_complex(re=None,im=None):
     '''Takes two arrays, and returns a complex array with re real values and im imarginary values'''
@@ -486,6 +497,7 @@ def create_uvfits(v_container=None,freq_cent=None, ra_point=None, dec_point=None
     ##ANTENNA TABLE MODS======================================================================
 
     template_uvfits[1].header['FREQ'] = freq_cent
+    template_uvfits[1].header['ARRNAM'] = 'MWA'
 
     ##MAJICK uses this date to set the LST
     dmy, hms = date.split()
@@ -569,7 +581,7 @@ def make_ini(prefix_name=None,ra=None,dec=None,freq=None,start_time=None,sky_osm
 
     out_file.close()
 
-def create_flagged_telescope(metafits=None,antenna_coord_file=None,azimuth=None,altitude=None,telescope_dir=None):
+def create_flagged_telescope(metafits=None,layout_array=None,azimuth=None,altitude=None,telescope_dir=None,new_telescope_dir=None):
     '''Takes an MWA layout text file with columns "label east north height" and uses them
     to create an OSKAR telescope model. Uses the metafits file to flag out the dipoles
     based on the XX flags - OSKAR can only flag whole elements, rather than individual pols'''
@@ -599,10 +611,8 @@ def create_flagged_telescope(metafits=None,antenna_coord_file=None,azimuth=None,
     for tile,dipole in zip(tile_flags,dipole_flags):
         flags_dict['Tile%d' %int(tile)].append(int(dipole))
 
-
-
-    ##Open the text file containing the MWA tile locations, and assign column names and type to the data
-    tile_locs = loadtxt(antenna_coord_file, dtype={'names': ('label', 'east', 'north', 'height'), 'formats': ('S7', float, float, float)})
+    # ##Open the text file containing the MWA tile locations, and assign column names and type to the data
+    # tile_locs = loadtxt(antenna_coord_file, dtype={'names': ('label', 'east', 'north', 'height'), 'formats': ('S7', float, float, float)})
 
     ##Spacing between dipoles is 1.1m on the ground mesh.
     ##Station layout coords are relative to station centre
@@ -629,58 +639,49 @@ def create_flagged_telescope(metafits=None,antenna_coord_file=None,azimuth=None,
         east_start = -1.65
         north_start += 1.1
 
-    ##Put telescope model into named telescope_dir - create
-    ##telescope_dir if necessary
-    if not path.exists(telescope_dir):
-        makedirs(telescope_dir)
+    ##Put telescope model into named new_telescope_dir - create
+    ##new_telescope_dir if necessary
+    if not path.exists(new_telescope_dir):
+        makedirs(new_telescope_dir)
     else:
-        print('Telescope %s already exists: overwriting contents!!' %telescope_dir)
+        print('Telescope %s already exists: overwriting contents!!' %new_telescope_dir)
+
+    ##cp across the beam gain information from the unflagged telescope dir
+
+    cmd = 'cp %s/OSKAR_beam_gains.npz %s/' %(telescope_dir,new_telescope_dir)
+    call(cmd, shell=True)
 
     ##Create overall tile layout file - specifies locations of tiles
 
-    out_file = open('%s/layout.txt' %telescope_dir,'w+')
-
-    for station in xrange(len(tile_locs['label'])):
-        ##Write out the telescope layout.txt file in
-        ##east,north,height coords.
-
-        ##There is some kind of co-ordinate difference between the RTS and OSKAR, so
-        ##need to make all coords negative here
-        ## (trial and error found this gives the expected u,v,w coords)
-        north = -tile_locs['north'][station]
-        east = -tile_locs['east'][station]
-        height = -tile_locs['height'][station]
-
-        out_file.write('%s %.5f %.5f\n' %(east,north,height))
-
-    out_file.close()
+    savetxt('%s/layout.txt' %new_telescope_dir,layout_array)
 
     ##Add the permitted_beams file so beam only points where we care
-    permitted = open('%s/permitted_beams.txt' %(telescope_dir),'w+')
+    permitted = open('%s/permitted_beams.txt' %(new_telescope_dir),'w+')
     permitted.write('%.5f %.5f' %(azimuth,altitude))
     permitted.close
 
     ##Tell OSKAR where the telescope lives.
     ##TODO HARDCODED TO MRO AT THE MOMENT
-    position = open('%s/position.txt' %(telescope_dir),'w+')
+    position = open('%s/position.txt' %(new_telescope_dir),'w+')
     position.write('116.670813889 -26.703319')
     position.close
 
     ##Build indidual station layouts
-    for station in range(1,len(tile_locs['label'])+1):
-        if not path.exists('%s/station%03d' %(telescope_dir,station)):
-            makedirs('%s/station%03d' %(telescope_dir,station))
+    for station in range(1,layout_array.shape[0]+1):
+        if not path.exists('%s/station%03d' %(new_telescope_dir,station)):
+            makedirs('%s/station%03d' %(new_telescope_dir,station))
 
         ##Just in case add the permitted_beams file so beam only points where we care as well
-        permitted = open('%s/station%03d/permitted_beams.txt' %(telescope_dir,station),'w+')
+        permitted = open('%s/station%03d/permitted_beams.txt' %(new_telescope_dir,station),'w+')
         permitted.write('%.5f %.5f' %(azimuth,altitude))
         permitted.close
 
-        out_file = open('%s/station%03d/layout.txt' %(telescope_dir,station),'w+')
+        out_file = open('%s/station%03d/layout.txt' %(new_telescope_dir,station),'w+')
 
-        if tile_locs['label'][station-1] in flags_dict:
-            print('Flagging %s (station%03d)' %(tile_locs['label'][station-1],station))
-            flags = flags_dict[tile_locs['label'][station-1]]
+        tile_name = 'Tile%d' %(station-1)
+        if tile_name in flags_dict:
+            print('Flagging %s (station%03d)' %(tile_name,station))
+            flags = flags_dict[tile_name]
             for dipole in xrange(16):
                 if dipole not in flags:
                     east,north = station_dict['%d' %dipole]
@@ -732,10 +733,17 @@ def add_data_to_uvfits(v_container=None,time_ind=None,num_baselines=None,templat
     comp_yx = make_complex(chan_yx_res,chan_yx_ims)
     comp_yy = make_complex(chan_yy_res,chan_yy_ims)
 
-    final_xx = comp_xx
-    final_xy = comp_xy
-    final_yx = comp_yx
-    final_yy = comp_yy
+    ##Remove the phase tracking added in by OSKAR if requested
+    if undo_phase_track:
+        final_xx = rotate_phase(wws=chan_ww,visibilities=comp_xx)
+        final_xy = rotate_phase(wws=chan_ww,visibilities=comp_xy)
+        final_yx = rotate_phase(wws=chan_ww,visibilities=comp_yx)
+        final_yy = rotate_phase(wws=chan_ww,visibilities=comp_yy)
+    else:
+        final_xx = comp_xx
+        final_xy = comp_xy
+        final_yx = comp_yx
+        final_yy = comp_yy
 
     #print oskar_ind,chan_ww[112],freq,comp_xx[112],rotated_xx[112]
 
@@ -747,6 +755,7 @@ def add_data_to_uvfits(v_container=None,time_ind=None,num_baselines=None,templat
     ##on frequency.
 
     correction = 1 / gain_correction(freq_cent)
+    # correction = 1.0
 
     ##If doing a mock CHIPS obs, the central channel is an average
     ##of a full and an empty channel, so need to set weights to 0.5
@@ -789,10 +798,17 @@ def add_data_to_uvfits(v_container=None,time_ind=None,num_baselines=None,templat
     if chan == central_freq_chan:
         central_freq_chan_value = freq_cent
 
-        # ##u,v,w stored in seconds by uvfits files
-        final_uu = chan_uu / freq_cent
-        final_vv = chan_vv / freq_cent
-        final_ww = chan_ww / freq_cent
+        ##u,v,w stored in seconds by uvfits files
+        ##if removing phase tracking, set 0 coords of u,v,w to zenith
+        if undo_phase_track:
+            final_uu,final_vv,final_ww = get_uvw_zenith(x_length=x_lengths,y_length=y_lengths,z_length=z_lengths)
+            final_uu /= freq_cent
+            final_vv /= freq_cent
+            final_ww /= freq_cent
+        else:
+            final_uu = chan_uu / freq_cent
+            final_vv = chan_vv / freq_cent
+            final_ww = chan_ww / freq_cent
 
         uus[time_ind_lower:time_ind_lower+num_baselines] = final_uu
         vvs[time_ind_lower:time_ind_lower+num_baselines] = final_vv
